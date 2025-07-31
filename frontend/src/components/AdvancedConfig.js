@@ -1,0 +1,261 @@
+import React, { useState } from 'react';
+import {
+  Card,
+  CardTitle,
+  CardBody,
+  Form,
+  FormGroup,
+  TextArea,
+  TextInput,
+  Button,
+  Grid,
+  GridItem,
+  Title,
+  ActionGroup,
+  Alert,
+  List,
+  ListItem,
+  HelperText,
+  HelperTextItem,
+  Checkbox
+} from '@patternfly/react-core';
+import { PlusIcon, TrashIcon } from '@patternfly/react-icons';
+
+function AdvancedConfig({ config, updateConfig }) {
+  const [helmChartForm, setHelmChartForm] = useState({
+    name: '',
+    repository: '',
+    version: ''
+  });
+  const [showHelmForm, setShowHelmForm] = useState(false);
+
+  const handleAdditionalImagesChange = (e) => {
+    const images = e.target.value
+      .split(',')
+      .map(img => img.trim())
+      .filter(img => img.length > 0);
+    updateConfig({ additional_images: images });
+  };
+
+  const addHelmChart = () => {
+    if (helmChartForm.name && helmChartForm.repository) {
+      const newChart = {
+        name: helmChartForm.name,
+        repository: helmChartForm.repository,
+        version: helmChartForm.version || ''
+      };
+      
+      const currentCharts = config.helm_charts || [];
+      updateConfig({ helm_charts: [...currentCharts, newChart] });
+      
+      setHelmChartForm({ name: '', repository: '', version: '' });
+      setShowHelmForm(false);
+    }
+  };
+
+  const removeHelmChart = (index) => {
+    const currentCharts = config.helm_charts || [];
+    const updatedCharts = currentCharts.filter((_, i) => i !== index);
+    updateConfig({ helm_charts: updatedCharts });
+  };
+
+  return (
+    <Grid hasGutter>
+      <GridItem span={12}>
+        <Card>
+          <CardTitle>
+            <Title headingLevel="h2">Platform Configuration</Title>
+          </CardTitle>
+          <CardBody>
+            <Form>
+              <FormGroup>
+                <Checkbox
+                  label="Enable KubeVirt Container Mirroring"
+                  isChecked={config.kubevirt_container || false}
+                  onChange={(checked) => updateConfig({ kubevirt_container: checked })}
+                  id="kubevirt-container-checkbox"
+                  description="Enables mirroring of KubeVirt container images by setting mirror.platform.kubeVirtContainer: true"
+                />
+              </FormGroup>
+              <FormGroup>
+                <Checkbox
+                  label="Enable Graph Mirroring"
+                  isChecked={config.graph || false}
+                  onChange={(checked) => updateConfig({ graph: checked })}
+                  id="graph-checkbox"
+                  description="Enables mirroring of graph data and related components by setting mirror.platform.graph: true"
+                />
+              </FormGroup>
+            </Form>
+          </CardBody>
+        </Card>
+      </GridItem>
+
+      <GridItem span={12}>
+        <Card>
+          <CardTitle>
+            <Title headingLevel="h2">Additional Images</Title>
+          </CardTitle>
+          <CardBody>
+            <Form>
+              <FormGroup
+                label="Additional Container Images"
+                fieldId="additional-images"
+                helperText={
+                  <HelperText>
+                    <HelperTextItem>
+                      Enter comma-separated container image references to include in the mirror
+                    </HelperTextItem>
+                  </HelperText>
+                }
+              >
+                <TextArea
+                  id="additional-images"
+                  rows={4}
+                  value={config.additional_images?.join(', ') || ''}
+                  onChange={handleAdditionalImagesChange}
+                  placeholder="registry.redhat.io/ubi8/ubi:latest, quay.io/my-org/app:v1.0.0"
+                />
+              </FormGroup>
+            </Form>
+          </CardBody>
+        </Card>
+      </GridItem>
+
+      <GridItem span={12}>
+        <Card>
+          <CardTitle>
+            <Title headingLevel="h2">Helm Charts</Title>
+          </CardTitle>
+          <CardBody>
+            <Form>
+              <ActionGroup>
+                <Button
+                  variant={showHelmForm ? "secondary" : "primary"}
+                  onClick={() => setShowHelmForm(!showHelmForm)}
+                  icon={showHelmForm ? undefined : <PlusIcon />}
+                >
+                  {showHelmForm ? 'Cancel' : 'Add Helm Chart'}
+                </Button>
+              </ActionGroup>
+
+              {showHelmForm && (
+                <Grid hasGutter style={{ marginTop: '1rem', padding: '1rem', border: '1px solid var(--pf-global--BorderColor--100)', borderRadius: '4px' }}>
+                  <GridItem span={12}>
+                    <FormGroup
+                      label="Chart Name"
+                      fieldId="helm-name"
+                      isRequired
+                    >
+                      <TextInput
+                        id="helm-name"
+                        type="text"
+                        value={helmChartForm.name}
+                        onChange={(value) => setHelmChartForm({ ...helmChartForm, name: value })}
+                        placeholder="prometheus"
+                      />
+                    </FormGroup>
+                  </GridItem>
+
+                  <GridItem span={12}>
+                    <FormGroup
+                      label="Repository"
+                      fieldId="helm-repository"
+                      isRequired
+                    >
+                      <TextInput
+                        id="helm-repository"
+                        type="text"
+                        value={helmChartForm.repository}
+                        onChange={(value) => setHelmChartForm({ ...helmChartForm, repository: value })}
+                        placeholder="https://prometheus-community.github.io/helm-charts"
+                      />
+                    </FormGroup>
+                  </GridItem>
+
+                  <GridItem span={12}>
+                    <FormGroup
+                      label="Version (optional)"
+                      fieldId="helm-version"
+                    >
+                      <TextInput
+                        id="helm-version"
+                        type="text"
+                        value={helmChartForm.version}
+                        onChange={(value) => setHelmChartForm({ ...helmChartForm, version: value })}
+                        placeholder="15.0.0"
+                      />
+                    </FormGroup>
+                  </GridItem>
+
+                  <GridItem span={12}>
+                    <ActionGroup>
+                      <Button
+                        variant="primary"
+                        onClick={addHelmChart}
+                        isDisabled={!helmChartForm.name || !helmChartForm.repository}
+                      >
+                        Add Chart
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setShowHelmForm(false);
+                          setHelmChartForm({ name: '', repository: '', version: '' });
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </ActionGroup>
+                  </GridItem>
+                </Grid>
+              )}
+
+              {config.helm_charts && config.helm_charts.length > 0 && (
+                <List style={{ marginTop: '1rem' }}>
+                  {config.helm_charts.map((chart, index) => (
+                    <ListItem key={index}>
+                      <Grid hasGutter>
+                        <GridItem span={10}>
+                          <div>
+                            <strong>{chart.name}</strong>
+                            <br />
+                            <small>{chart.repository}</small>
+                            {chart.version && (
+                              <>
+                                <br />
+                                <small><strong>Version:</strong> {chart.version}</small>
+                              </>
+                            )}
+                          </div>
+                        </GridItem>
+                        <GridItem span={2}>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => removeHelmChart(index)}
+                            icon={<TrashIcon />}
+                          >
+                            Remove
+                          </Button>
+                        </GridItem>
+                      </Grid>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+
+              {(!config.helm_charts || config.helm_charts.length === 0) && !showHelmForm && (
+                <Alert variant="info" title="No Helm charts configured">
+                  Click "Add Helm Chart" to add a Helm chart to your configuration.
+                </Alert>
+              )}
+            </Form>
+          </CardBody>
+        </Card>
+      </GridItem>
+    </Grid>
+  );
+}
+
+export default AdvancedConfig;

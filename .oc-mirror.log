@@ -1,0 +1,921 @@
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Listing channels for version 4.19.
+
+candidate-4.18
+eus-4.18
+fast-4.18
+stable-4.18
+candidate-4.19
+fast-4.19
+stable-4.19
+candidate-4.20
+Listing channels for version 4.19.
+
+fast-4.18
+stable-4.18
+candidate-4.19
+fast-4.19
+stable-4.19
+candidate-4.20
+candidate-4.18
+eus-4.18
+Listing stable channels. Use --channel=<channel-name> to filter.
+Use oc-mirror list release --channels to discover other channels.
+
+Channel: stable-4.18
+Architecture: amd64
+4.16.0
+4.16.1
+4.16.2
+4.16.3
+4.16.4
+4.16.5
+4.16.6
+4.16.7
+4.16.8
+4.16.9
+4.16.10
+4.16.11
+4.16.12
+4.16.13
+4.16.14
+4.16.15
+4.16.16
+4.16.17
+4.16.18
+4.16.19
+4.16.20
+4.16.21
+4.16.23
+4.16.24
+4.16.25
+4.16.26
+4.16.27
+4.16.28
+4.16.29
+4.16.30
+4.16.32
+4.16.33
+4.16.34
+4.16.35
+4.16.36
+4.16.37
+4.16.38
+4.16.39
+4.16.40
+4.16.41
+4.16.42
+4.16.43
+4.17.0
+4.17.1
+4.17.2
+4.17.3
+4.17.4
+4.17.5
+4.17.6
+4.17.7
+4.17.8
+4.17.9
+4.17.10
+4.17.11
+4.17.12
+4.17.14
+4.17.15
+4.17.16
+4.17.17
+4.17.18
+4.17.19
+4.17.20
+4.17.21
+4.17.22
+4.17.23
+4.17.24
+4.17.25
+4.17.26
+4.17.27
+4.17.28
+4.17.29
+4.17.30
+4.17.31
+4.17.32
+4.17.33
+4.17.34
+4.17.35
+4.18.1
+4.18.2
+4.18.3
+4.18.4
+4.18.5
+4.18.6
+4.18.7
+4.18.8
+4.18.9
+4.18.10
+4.18.11
+4.18.12
+4.18.13
+4.18.14
+4.18.15
+4.18.16
+4.18.17
+4.18.18
+4.18.19
+4.18.20
+Listing stable channels. Use --channel=<channel-name> to filter.
+Use oc-mirror list release --channels to discover other channels.
+
+Channel: stable-4.18
+Architecture: amd64
+4.16.0
+4.16.1
+4.16.2
+4.16.3
+4.16.4
+4.16.5
+4.16.6
+4.16.7
+4.16.8
+4.16.9
+4.16.10
+4.16.11
+4.16.12
+4.16.13
+4.16.14
+4.16.15
+4.16.16
+4.16.17
+4.16.18
+4.16.19
+4.16.20
+4.16.21
+4.16.23
+4.16.24
+4.16.25
+4.16.26
+4.16.27
+4.16.28
+4.16.29
+4.16.30
+4.16.32
+4.16.33
+4.16.34
+4.16.35
+4.16.36
+4.16.37
+4.16.38
+4.16.39
+4.16.40
+4.16.41
+4.16.42
+4.16.43
+4.17.0
+4.17.1
+4.17.2
+4.17.3
+4.17.4
+4.17.5
+4.17.6
+4.17.7
+4.17.8
+4.17.9
+4.17.10
+4.17.11
+4.17.12
+4.17.14
+4.17.15
+4.17.16
+4.17.17
+4.17.18
+4.17.19
+4.17.20
+4.17.21
+4.17.22
+4.17.23
+4.17.24
+4.17.25
+4.17.26
+4.17.27
+4.17.28
+4.17.29
+4.17.30
+4.17.31
+4.17.32
+4.17.33
+4.17.34
+4.17.35
+4.18.1
+4.18.2
+4.18.3
+4.18.4
+4.18.5
+4.18.6
+4.18.7
+4.18.8
+4.18.9
+4.18.10
+4.18.11
+4.18.12
+4.18.13
+4.18.14
+4.18.15
+4.18.16
+4.18.17
+4.18.18
+4.18.19
+4.18.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+NAME                                            DISPLAY NAME  DEFAULT CHANNEL
+3scale-operator                                               threescale-2.15
+advanced-cluster-management                                   release-2.13
+amq-broker-rhel8                                              7.12.x
+amq-broker-rhel9                                              7.13.x
+amq-online                                                    stable
+amq-streams                                                   stable
+amq-streams-console                                           alpha
+amq7-interconnect-operator                                    1.10.x
+ansible-automation-platform-operator                          stable-2.5
+ansible-cloud-addons-operator                                 stable-2.5-cluster-scoped
+apicast-operator                                              threescale-2.15
+apicurio-registry-3                                           3.x
+authorino-operator                                            stable
+aws-efs-csi-driver-operator                                   stable
+aws-load-balancer-operator                                    stable-v1
+bamoe-businessautomation-operator                             8.x-stable
+bamoe-kogito-operator                                         8.x
+bpfman-operator                                               latest
+businessautomation-operator                                   stable
+cephcsi-operator                                              stable-4.18
+cincinnati-operator                                           v1
+cli-manager                                                   tech-preview
+cluster-kube-descheduler-operator                             stable
+cluster-logging                                               stable-6.3
+cluster-observability-operator                                stable
+clusterresourceoverride                                       stable
+compliance-operator                                           stable
+container-security-operator                                   stable-3.15
+costmanagement-metrics-operator                               stable
+cryostat-operator                                             stable
+datagrid                                                      stable
+deployment-validation-operator                                alpha
+devspaces                                                     stable
+devworkspace-operator                                         fast
+dns-operator                                                  stable
+dpu-network-operator                                          stable
+dpu-operator                                                  stable
+eap                                                           stable
+elasticsearch-operator                                        stable-5.8
+external-dns-operator                                         stable-v1
+fence-agents-remediation                                      stable
+file-integrity-operator                                       stable
+fuse-apicurito                                                fuse-apicurito-7.13.x
+fuse-console                                                  7.13.x
+fuse-online                                                   latest
+gatekeeper-operator-product                                   stable
+gcp-filestore-csi-driver-operator                             stable
+helloworld-operator                                           stable
+ingress-node-firewall                                         stable
+jaeger-product                                                stable
+jws-operator                                                  alpha
+kernel-module-management                                      stable
+kernel-module-management-hub                                  stable
+kiali-ossm                                                    stable
+kubernetes-nmstate-operator                                   stable
+kubevirt-hyperconverged                                       stable
+kueue-operator                                                stable-v1.0
+lifecycle-agent                                               stable
+lightspeed-operator                                           stable
+limitador-operator                                            stable
+local-storage-operator                                        stable
+logic-operator-rhel8                                          alpha
+loki-operator                                                 stable-6.3
+lvms-operator                                                 stable-4.18
+machine-deletion-remediation                                  stable
+mcg-operator                                                  stable-4.18
+metallb-operator                                              stable
+mta-operator                                                  stable-v7.3
+mtc-operator                                                  release-v1.8
+mtr-operator                                                  alpha
+mtv-operator                                                  release-v2.9
+multiarch-tuning-operator                                     stable
+multicluster-engine                                           stable-2.8
+multicluster-global-hub-operator-rh                           release-1.5
+nbde-tang-server                                              stable
+netobserv-operator                                            stable
+nfd                                                           stable
+node-healthcheck-operator                                     stable
+node-maintenance-operator                                     stable
+node-observability-operator                                   alpha
+numaresources-operator                                        4.18
+ocs-client-operator                                           stable-4.18
+ocs-operator                                                  stable-4.18
+odf-csi-addons-operator                                       stable-4.18
+odf-dependencies                                              stable-4.18
+odf-multicluster-orchestrator                                 stable-4.18
+odf-operator                                                  stable-4.18
+odf-prometheus-operator                                       stable-4.18
+odr-cluster-operator                                          stable-4.18
+odr-hub-operator                                              stable-4.18
+openshift-builds-operator                                     latest
+openshift-cert-manager-operator                               stable-v1
+openshift-custom-metrics-autoscaler-operator                  stable
+openshift-gitops-operator                                     latest
+openshift-pipelines-operator-rh                               latest
+openshift-secondary-scheduler-operator                        stable
+openshift-zero-trust-workload-identity-manager                tech-preview-v0.1
+openstack-operator                                            stable-v1.0
+opentelemetry-product                                         stable
+orchestrator-operator                                         stable
+pf-status-relay-operator                                      stable
+power-monitoring-operator                                     tech-preview
+ptp-operator                                                  stable
+quay-bridge-operator                                          stable-3.15
+quay-operator                                                 stable-3.15
+recipe                                                        stable-4.18
+red-hat-camel-k                                               1.10.x
+red-hat-hawtio-operator                                       stable-v1
+redhat-oadp-operator                                          stable-1.4
+rh-service-binding-operator                                   stable
+rhacs-operator                                                stable
+rhbk-operator                                                 stable-v26.2
+rhcl-operator                                                 stable
+rhdh                                                          fast
+rhods-operator                                                stable
+rhpam-kogito-operator                                         7.x
+rhsso-operator                                                stable
+rhtas-operator                                                stable
+rhtpa-operator                                                stable
+rook-ceph-operator                                            stable-4.18
+run-once-duration-override-operator                           stable
+sandboxed-containers-operator                                 stable
+secrets-store-csi-driver-operator                             stable
+security-profiles-operator                                    release-alpha-rhel-8
+self-node-remediation                                         stable
+serverless-operator                                           stable
+service-registry-operator                                     2.x
+service-telemetry-operator                                    stable-1.5
+servicemeshoperator                                           stable
+servicemeshoperator3                                          stable
+skupper-operator                                              stable-2
+smart-gateway-operator                                        stable-1.5
+smb-csi-driver-operator                                       stable
+sriov-network-operator                                        stable
+submariner                                                    stable-0.20
+tang-operator                                                 alpha
+tempo-product                                                 stable
+topology-aware-lifecycle-manager                              stable
+trustee-operator                                              stable
+vertical-pod-autoscaler                                       stable
+volsync-product                                               stable
+watcher-operator                                              stable-v1.0
+web-terminal                                                  fast
+windows-machine-config-operator                               stable
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.15:
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Listing channels for version 4.18.
+
+eus-4.16
+candidate-4.19
+fast-4.19
+stable-4.19
+stable-4.17
+eus-4.18
+fast-4.18
+fast-4.16
+stable-4.16
+candidate-4.17
+candidate-4.18
+candidate-4.16
+fast-4.17
+stable-4.18
+candidate-4.20
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Channel: fast-4.18
+Architecture: amd64
+4.16.0
+4.16.1
+4.16.2
+4.16.3
+4.16.4
+4.16.5
+4.16.6
+4.16.7
+4.16.8
+4.16.9
+4.16.10
+4.16.11
+4.16.12
+4.16.13
+4.16.14
+4.16.15
+4.16.16
+4.16.17
+4.16.18
+4.16.19
+4.16.20
+4.16.21
+4.16.23
+4.16.24
+4.16.25
+4.16.26
+4.16.27
+4.16.28
+4.16.29
+4.16.30
+4.16.32
+4.16.33
+4.16.34
+4.16.35
+4.16.36
+4.16.37
+4.16.38
+4.16.39
+4.16.40
+4.16.41
+4.16.42
+4.16.43
+4.16.44
+4.17.0
+4.17.1
+4.17.2
+4.17.3
+4.17.4
+4.17.5
+4.17.6
+4.17.7
+4.17.8
+4.17.9
+4.17.10
+4.17.11
+4.17.12
+4.17.14
+4.17.15
+4.17.16
+4.17.17
+4.17.18
+4.17.19
+4.17.20
+4.17.21
+4.17.22
+4.17.23
+4.17.24
+4.17.25
+4.17.26
+4.17.27
+4.17.28
+4.17.29
+4.17.30
+4.17.31
+4.17.32
+4.17.33
+4.17.34
+4.17.35
+4.17.36
+4.18.1
+4.18.2
+4.18.3
+4.18.4
+4.18.5
+4.18.6
+4.18.7
+4.18.8
+4.18.9
+4.18.10
+4.18.11
+4.18.12
+4.18.13
+4.18.14
+4.18.15
+4.18.16
+4.18.17
+4.18.18
+4.18.19
+4.18.20
+4.18.21
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift Container Platform release versions: 
+  4.0
+  4.1
+  4.2
+  4.3
+  4.4
+  4.5
+  4.6
+  4.7
+  4.8
+  4.9
+  4.10
+  4.11
+  4.12
+  4.13
+  4.14
+  4.15
+  4.16
+  4.17
+  4.18
+  4.19
+  4.20
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Listing channels for version 4.18.
+
+stable-4.17
+eus-4.16
+stable-4.16
+candidate-4.17
+candidate-4.19
+fast-4.19
+stable-4.19
+fast-4.16
+fast-4.18
+stable-4.18
+candidate-4.20
+candidate-4.16
+fast-4.17
+candidate-4.18
+eus-4.18
+Listing stable channels. Use --channel=<channel-name> to filter.
+Use oc-mirror list release --channels to discover other channels.
+
+Channel: stable-4.18
+Architecture: amd64
+4.16.0
+4.16.1
+4.16.2
+4.16.3
+4.16.4
+4.16.5
+4.16.6
+4.16.7
+4.16.8
+4.16.9
+4.16.10
+4.16.11
+4.16.12
+4.16.13
+4.16.14
+4.16.15
+4.16.16
+4.16.17
+4.16.18
+4.16.19
+4.16.20
+4.16.21
+4.16.23
+4.16.24
+4.16.25
+4.16.26
+4.16.27
+4.16.28
+4.16.29
+4.16.30
+4.16.32
+4.16.33
+4.16.34
+4.16.35
+4.16.36
+4.16.37
+4.16.38
+4.16.39
+4.16.40
+4.16.41
+4.16.42
+4.16.43
+4.17.0
+4.17.1
+4.17.2
+4.17.3
+4.17.4
+4.17.5
+4.17.6
+4.17.7
+4.17.8
+4.17.9
+4.17.10
+4.17.11
+4.17.12
+4.17.14
+4.17.15
+4.17.16
+4.17.17
+4.17.18
+4.17.19
+4.17.20
+4.17.21
+4.17.22
+4.17.23
+4.17.24
+4.17.25
+4.17.26
+4.17.27
+4.17.28
+4.17.29
+4.17.30
+4.17.31
+4.17.32
+4.17.33
+4.17.34
+4.17.35
+4.18.1
+4.18.2
+4.18.3
+4.18.4
+4.18.5
+4.18.6
+4.18.7
+4.18.8
+4.18.9
+4.18.10
+4.18.11
+4.18.12
+4.18.13
+4.18.14
+4.18.15
+4.18.16
+4.18.17
+4.18.18
+4.18.19
+4.18.20
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:
+Available OpenShift OperatorHub catalogs:
+OpenShift 4.18:

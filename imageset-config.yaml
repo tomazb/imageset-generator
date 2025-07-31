@@ -1,0 +1,23 @@
+apiVersion: mirror.openshift.io/v1alpha2
+kind: ImageSetConfiguration
+metadata:
+  name: openshift-imageset
+  labels:
+    generated-by: imageset-generator
+    generated-at: '2025-07-29T20:46:43.646145'
+spec:
+  archiveSize: 4
+  mirror:
+    platform:
+      channels:
+      - name: stable-4.14
+        type: ocp
+        minVersion: 4.14.1
+        maxVersion: 4.14.1
+      graph: true
+    operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index
+      packages:
+      - name: cluster-logging
+    additionalImages: []
+    helm: {}
