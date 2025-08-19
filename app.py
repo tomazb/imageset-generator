@@ -6,10 +6,13 @@ This Flask application provides a REST API for the OpenShift ImageSetConfigurati
 It serves as the backend for the React frontend application.
 """
 
+import json
+import re
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import yaml
 import os
+import subprocess
 import tempfile
 from datetime import datetime
 from generator import ImageSetGenerator
@@ -17,6 +20,119 @@ import traceback
 
 app = Flask(__name__, static_folder='frontend/build')
 CORS(app)  # Enable CORS for all routes
+
+def return_base_catalog_info(catalog_url):
+    base_catalogs = [
+            {
+                "name": "Red Hat Operators",
+                "base_url": "registry.redhat.io/redhat/redhat-operator-index",
+                "description": "Official Red Hat certified operators",
+                "default": True
+            },
+            {
+                "name": "Community Operators",
+                "base_url": "registry.redhat.io/redhat/community-operator-index",
+                "description": "Community-maintained operators",
+                "default": False
+            },
+            {
+                "name": "Certified Operators", 
+                "base_url": "registry.redhat.io/redhat/certified-operator-index",
+                "description": "Third-party certified operators",
+                "default": False
+            },
+            {
+                "name": "Red Hat Marketplace",
+                "base_url": "registry.redhat.io/redhat/redhat-marketplace-index",
+                "description": "Commercial operators from Red Hat Marketplace",
+                "default": False
+            }
+        ]
+    
+    for catalog in base_catalogs:
+        if catalog_url.startswith(catalog['base_url']):
+            return {
+                "name": catalog['name'],
+                "base_url": catalog['base_url'],
+                "description": catalog['description'],
+                "default": catalog['default']
+            }
+    return None
+
+def get_operators_from_opm(catalog_url, version_key):
+    """Get operators from a catalog using opm render"""
+    try:
+        full_catalog = f"{catalog_url}:v{version_key}"
+        cmd = ['opm', 'render', '--skip-tls', full_catalog]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        
+        if result.returncode != 0:
+            raise Exception(f"opm render failed: {result.stderr}")
+            
+        operators = set()
+        docs = list(yaml.safe_load_all(result.stdout))
+        for doc in docs:
+            if not isinstance(doc, dict):
+                continue
+            if doc.get('kind') == 'ClusterServiceVersion':
+                metadata = doc.get('metadata', {})
+                name = metadata.get('name')
+                if name:
+                    op_name = name.split('.')[0]
+                    operators.add(op_name)
+                    
+        return sorted(list(operators))
+    except Exception as e:
+        raise Exception(f"Error getting operators from opm: {str(e)}")
+
+def get_cached_operators(cache_file):
+    """Get operators from cache file if it exists and is not expired"""
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r') as f:
+                data = json.load(f)
+                return data.get('operators', [])
+        except Exception:
+            pass
+    return None
+
+def load_operators_from_file(catalog_key, version_key):
+    """Load operators from cached JSON files"""
+    try:
+
+        # Try to load from cache file first
+        catalog_index= (catalog_key.split('/')[-1]).split(':')[0]
+        static_file_path = os.path.join("data", f"operators-{catalog_index}-{version_key}.json")
+
+        if os.path.exists(static_file_path):
+            with open(static_file_path, 'r') as f:
+                data = json.load(f)
+                return data.get('operators', [])
+        
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"Error loading operators from file: {e}")
+        return None
+
+def load_catalogs_from_file(version_key):
+    """Load catalog information from cached JSON files"""
+
+    try:
+        filename = f'catalogs-{version_key}.json'
+        filepath = os.path.join('data', filename)
+        
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                catalogs = json.load(f)
+                return catalogs
+        
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"Error loading catalogs from file: {e}")
+        return None
+
 
 
 @app.route('/', defaults={'path': ''})
@@ -33,7 +149,6 @@ def serve_react_app(path):
     else:
         return send_from_directory(app.static_folder, 'index.html')
 
-
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -43,215 +158,737 @@ def health_check():
         'version': '1.0.0'
     })
 
-
-
-@app.route('/api/releases', methods=['GET'])
-def get_ocp_releases():
-    """Get available OCP releases using oc-mirror list releases command"""
-    try:
-        import subprocess
-        import re
-        
-        # Run oc-mirror list releases command
-        result = subprocess.run(
-            ['oc-mirror', 'list', 'releases'],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        
-        if result.returncode == 0:
-            # Parse the output and extract version numbers
-            releases = []
-            lines = result.stdout.strip().split('\n')
-            
-            for line in lines:
-                line = line.strip()
-                # Skip the header line and empty lines
-                if (line and 
-                    not line.startswith('Available OpenShift') and
-                    not line.startswith('Available') and
-                    # Look for version patterns like 4.X
-                    re.match(r'^\d+\.\d+', line)):
-                    
-                    # Extract the version
-                    version_match = re.match(r'^(\d+\.\d+)', line)
-                    if version_match:
-                        version = version_match.group(1)
-                        if version not in releases:
-                            releases.append(version)
-            
-            # Sort releases in descending order (newest first)
-            releases = sorted(list(set(releases)), key=lambda x: [int(i) for i in x.split('.')], reverse=True)
-            
-            if releases:
-                return jsonify({
-                    'status': 'success',
-                    'releases': releases,
-                    'count': len(releases),
-                    'timestamp': datetime.now().isoformat(),
-                    'source': 'oc-mirror command',
-                    'note': 'Releases fetched dynamically from oc-mirror'
-                })
-            else:
-                raise Exception("No releases found in oc-mirror output")
-        else:
-            raise Exception(f"oc-mirror command failed with return code {result.returncode}: {result.stderr}")
-            
-    except subprocess.TimeoutExpired:
-        print("Warning: oc-mirror list releases command timed out, using fallback list")
-        pass
-    except FileNotFoundError:
-        print("Warning: oc-mirror command not found, using fallback list")
-        pass
-    except Exception as e:
-        print(f"Warning: Error running oc-mirror list releases: {str(e)}, using fallback list")
-        pass
+@app.route("/api/versions/refresh", methods=["POST"])
+def refresh_versions():
+    """Refresh the list of available OCP releases"""
+    # Logic to refresh the releases (e.g., by re-running oc-mirror)
+    app.logger.debug("Refreshing OCP releases...")
+    releases = []
+    static_file_path = os.path.join("data", "ocp-versions.json")
     
-    # Fallback to static list
-    fallback_releases = ['4.18', '4.17', '4.16', '4.15', '4.14', '4.13', '4.12', '4.11', '4.10', '4.9', '4.8', '4.7', '4.6']
-    return jsonify({
-        'status': 'success',
-        'releases': fallback_releases,
-        'count': len(fallback_releases),
-        'timestamp': datetime.now().isoformat(),
-        'source': 'static fallback',
-        'note': 'Using fallback release list - oc-mirror command not available or failed'
-    })
-
-
-@app.route('/api/channels/<version>', methods=['GET'])
-def get_ocp_channels(version):
-    """Get available OCP channels for a specific version using oc-mirror"""
     try:
-        import subprocess
-        import re
+        # Run oc-mirror to get the latest releases
+        app.logger.debug("Running oc-mirror to refresh releases...")
+        result = subprocess.run(['oc-mirror', 'list', 'releases'], capture_output=True, text=True, timeout=30)
         
-        # Validate version format (basic validation)
-        if not re.match(r'^\d+\.\d+$', version):
+        if result.returncode != 0:
+            app.logger.error(f"oc-mirror command failed: {result.stderr}")
             return jsonify({
                 'status': 'error',
-                'message': 'Invalid version format. Expected format: X.Y (e.g., 4.14)',
-                'timestamp': datetime.now().isoformat()
-            }), 400
-        
-        # Run oc-mirror list releases --channels --version=X.Y command
-        result = subprocess.run(
-            ['oc-mirror', 'list', 'releases', '--channels', f'--version={version}'],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        
-        if result.returncode == 0:
-            # Parse the output and extract channel names
-            channels = []
-            lines = result.stdout.strip().split('\n')
-            
-            for line in lines:
-                line = line.strip()
-                # Skip empty lines, warnings, and header text
-                if (line and 
-                    not line.startswith('⚠️') and 
-                    not line.startswith('W') and
-                    not line.startswith('Listing channels') and
-                    not line.startswith('#') and
-                    # Check if line looks like a channel name (contains numbers and hyphens)
-                    re.match(r'^[a-z]+-\d+\.\d+$', line)):
-                    channels.append(line)
-            
-            # Remove duplicates and sort
-            channels = sorted(list(set(channels)))
-            
-            return jsonify({
-                'status': 'success',
-                'version': version,
-                'channels': channels,
-                'count': len(channels),
-                'timestamp': datetime.now().isoformat()
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to fetch channels',
+                'message': 'Failed to refresh releases',
                 'error': result.stderr,
                 'timestamp': datetime.now().isoformat()
             }), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'status': 'error',
-            'message': 'Request timeout while fetching channels',
-            'timestamp': datetime.now().isoformat()
-        }), 504
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error fetching channels: {str(e)}',
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-
-@app.route('/api/releases/<channel>', methods=['GET'])
-def get_channel_releases(channel):
-    """Get available releases for a specific channel using oc-mirror"""
-    try:
-        # Validate channel parameter
-        if not channel or not channel.strip():
-            return jsonify({
-                'status': 'error',
-                'error': 'Channel parameter is required'
-            }), 400
-        
-        import subprocess
-        import re
-        
-        # Run oc-mirror list releases --channel=<channel> command
-        result = subprocess.run(
-            ['oc-mirror', 'list', 'releases', f'--channel={channel}'],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        
-        if result.returncode != 0:
-            return jsonify({
-                'status': 'error',
-                'error': f'oc-mirror command failed: {result.stderr}'
-            }), 500
         
         # Parse the output to extract releases
-        releases = []
         lines = result.stdout.strip().split('\n')
         
         for line in lines:
+
             line = line.strip()
-            # Look for version patterns like 4.16.0, 4.18.1, etc.
-            if re.match(r'^\d+\.\d+\.\d+$', line):
+            if re.match(r'^\d+\.\d+$', line):  # Match semantic versioning
                 releases.append(line)
         
         # Sort releases in semantic version order
         releases.sort(key=lambda x: tuple(map(int, x.split('.'))))
         
+        # Save to static file for future use
+        app.logger.debug(f"Saving refreshed releases to {static_file_path}")
+        with open(static_file_path, 'w') as f:
+            json.dump({
+                "releases": releases,
+                "count": len(releases),
+                "source": "oc-mirror",
+                "timestamp": datetime.now().isoformat()
+            }, f, indent=2)
+            
+    except Exception as e:
+        app.logger.error(f"Error refreshing releases: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to refresh releases: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+        
+    return jsonify({
+        'status': 'success',
+        'releases': releases,
+        'count': len(releases),
+        'timestamp': datetime.now().isoformat(),
+        'source': 'oc-mirror'
+    })
+
+@app.route('/api/operators/refresh', methods=['POST'])
+def refresh_ocp_operators(catalog=None, version=None):
+    """Refresh the list of available OCP operators"""
+    app.logger.debug("Refreshing OCP operators...")
+    
+    operator_output=[]
+    
+    
+    if catalog is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Catalog parameter is required',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+
+    if version is None or not version.strip():
+        version = catalog.split(':')[-1]
+
+    #Get File static path
+    catalog_index= (catalog.split('/')[-1]).split(':')[0]
+    static_file_path = os.path.join("data", f"operators-{catalog_index}-{version}.json")
+    static_file_path_index = os.path.join("data", f"operators-{catalog_index}-{version}-index.json")
+    static_file_path_data = os.path.join("data", f"operators-{catalog_index}-{version}-data.json")
+    static_file_path_channel = os.path.join("data", f"operators-{catalog_index}-{version}-channel.json")
+
+    # Render the catalog and save to static files
+    try:
+        if not os.path.exists(static_file_path_index):
+            with open(static_file_path_index, 'w') as f:
+                subprocess.run(['opm', 'render', catalog, '--skip-tls-verify','--output', 'json'], stdout=f, check=True)
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f"Error running opm render: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to refresh operators: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+        
+    
+    #If index file exists use jq to filter Operator Index
+    #Get Operator Field Data
+    if os.path.exists(static_file_path_index):
+        jq_filter = '''
+        select(.schema == "olm.bundle")
+        | select([.properties[]? | select(.type == "olm.maxOpenShiftVersion")] == [])
+        | [
+            .package,
+            .name,
+            (.properties[]? | select(.type == "olm.package") | .value.version),
+            ((.properties[]? | select(.type == "olm.csv.metadata") | .value.keywords | join(",")) // ""),
+            (.properties[]? | select(.type == "olm.csv.metadata") | .value.annotations.description),
+            (.properties[]? | select(.schema == "olm.channel") | .name)
+        ] | @tsv
+        '''
+
+        cmd = [
+            "jq", "-r", jq_filter
+        ]
+
+        try:
+            if not os.path.exists(static_file_path_data):
+                with open(static_file_path_index, "r") as infile, open(static_file_path_data, "w") as outfile:
+                    subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
+        except subprocess.CalledProcessError as e:
+            app.logger.error(f"Error running jq: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to refresh operators: {str(e)}',
+                'timestamp': datetime.now().isoformat()
+            }), 500
+        
+        #Get operator Channel Data
+        jq_filter_channel = '''
+        select(.schema == "olm.channel")
+        | [.package, .name, .entries[]?.name, .channelName] | @tsv
+        '''      
+
+        cmd_channel = [
+            "jq", "-r", jq_filter_channel
+        ]
+        
+        try:
+            if not os.path.exists(static_file_path_channel):
+                with open(static_file_path_index, "r") as infile, open(static_file_path_channel, "w") as outfile:
+                    subprocess.run(cmd_channel, stdin=infile, stdout=outfile, check=True)
+        except subprocess.CalledProcessError as e:
+            app.logger.error(f"Error running jq: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to refresh operators: {str(e)}',
+                'timestamp': datetime.now().isoformat()
+            }), 500
+            
+    
+        #Parse TSV Output Files to get Data
+        try:
+            with open(static_file_path_data, "r") as f:
+                data = f.read()
+                # Process the TSV data as needed
+                lines = data.strip().split('\n')
+                for line in lines:
+                    fields = line.split('\t')
+                    # Do something with the fields
+                    if len(fields) < 5:
+                        operator_output.append({
+                            "package": fields[0],
+                            "name": fields[1],
+                            "version": fields[2]
+                        })
+                    if len(fields) >= 5:
+                        operator_output.append({
+                            "package": fields[0],
+                            "name": fields[1],
+                            "version": fields[2],
+                            "keywords": fields[3].split(",") if fields[3] else [],
+                            "description": fields[4],
+                            "channel": fields[5] if len(fields) > 5 else ""
+                        })
+                        
+                    #Search Channel File for Channel that matches name
+                    if fields[1] is not None:
+                        with open(static_file_path_channel, "r") as f:
+                            channel_data = f.read()
+                            # Process the channel data as needed
+                            lines = channel_data.strip().split('\n')
+                            for line in lines:
+                                if fields[1] in line:
+                                    channel_fields = line.split('\t')
+                                    if channel_fields[1] is not None:
+                                        operator_output[-1]["channel"] = channel_fields[1]
+                                        break
+
+        except Exception as e:
+            app.logger.error(f"Error reading TSV file: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to refresh operators: {str(e)}',
+                'timestamp': datetime.now().isoformat()
+            }), 500
+
+        #Write Output to file
+        with open(static_file_path, "w") as f:
+            json.dump({
+                "operators": operator_output,
+                "count": len(operator_output),
+                "source": "opm",
+                "timestamp": datetime.now().isoformat()
+            }, f, indent=2)
+
+        #return operator_output
         return jsonify({
             'status': 'success',
-            'channel': channel,
-            'releases': releases,
-            'count': len(releases)
+            'data': operator_output,
+            'timestamp': datetime.now().isoformat()
         })
+
+ 
+
+@app.route('/api/releases/refresh', methods=['POST'])
+def refresh_ocp_releases(version=None, channel=None):
+    """Refresh the list of available OCP releases for a specific version and channel"""
+    app.logger.debug("Refreshing OCP releases...")
+    if version is None or channel is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Version and channel parameter is required',
+            'timestamp': datetime.now().isoformat()
+        }), 400
         
-    except subprocess.TimeoutExpired:
+    # Check if version is in valid format
+    if not re.match(r'^\d+\.\d+$', version):
         return jsonify({
             'status': 'error',
-            'error': 'Command timed out'
-        }), 504
+            'message': 'Invalid version format. Expected format is X.Y (e.g., 4.14)',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    # Check if channel is in valid format
+    if not re.match(r'^[A-Za-z0-9\-]+\d+\.\d+$', channel):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid channel format. Expected alphanumeric characters and hyphens only',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    channels_releases = {}
+    static_file_path = os.path.join("data", "channel-releases.json")
+    try:
+        # Run oc-mirror to get the latest releases for the specified version and channel
+        app.logger.debug(f"Running oc-mirror to refresh releases for version {version} and channel {channel}...")
+        result = subprocess.run(['oc-mirror', 'list', 'releases', '--channel', channel, '--version', version], capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            app.logger.error(f"oc-mirror command failed: {result.stderr}")
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to refresh releases for version {version} and channel {channel}',
+                'error': result.stderr,
+                'timestamp': datetime.now().isoformat()
+            }), 500
+            
+        # Parse the output to extract releases
+        lines = result.stdout.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line == "":
+                continue
+            if re.match(r'^Architecture',line):
+                continue
+            if re.match(r'^Channel:', line):
+                continue
+            if re.match(r'^Listing', line):
+                continue
+            if re.match(r'.*oc-mirror.*', line):
+                continue
+            
+
+            if channel not in channels_releases:
+                channels_releases[channel] = []
+            channels_releases[channel].append(line)
+        
+        # Try to load from static file first
+        old_channels_releases = {}
+        try:
+            if os.path.exists(static_file_path):
+                with open(static_file_path, 'r') as f:
+                    data = json.load(f)
+                old_channels_releases = data.get("channel_releases", {})
+        except Exception as e:
+            app.logger.warning(f"Could not load static OCP versions file: {e}")
+        
+        # Merge old channels with new ones
+        old_channels_releases.update(channels_releases)
+
+        # Save to static file for future use
+        app.logger.debug(f"Saving refreshed releases to {static_file_path}")
+        with open(static_file_path, 'w') as f:
+            json.dump({
+                "channel_releases": old_channels_releases,
+                "count": len(old_channels_releases),
+                "source": "oc-mirror",
+                "timestamp": datetime.now().isoformat()
+            }, f, indent=2)
+            
     except Exception as e:
-        app.logger.error(f"Error getting channel releases: {str(e)}")
+        app.logger.error(f"Error refreshing releases: {e}")
         return jsonify({
             'status': 'error',
-            'error': str(e)
+            'message': f'Failed to refresh releases: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+        
+    return jsonify({
+        'status': 'success',
+        'channel_releases': channels_releases,
+        'count': len(channels_releases),
+        'timestamp': datetime.now().isoformat(),
+        'source': 'oc-mirror'
+    })
+
+@app.route('/api/channels/refresh', methods=['POST'])
+def refresh_ocp_channels(version=None):
+    """Refresh the list of available OCP channels for each version"""
+    app.logger.debug("Refreshing OCP channels...")
+    channels = {}
+    
+    static_file_path = os.path.join("data", "ocp-channels.json")
+    version_list = []
+    # Use Version if provided, or get available versions if not provided
+    if version:
+        app.logger.debug(f"Fetching channels for specific version: {version}")
+        version_list.append(version)
+    else:
+        app.logger.debug("Fetching channels for all available versions")
+        try:
+        # Try to load from static file first
+            static_file_path = os.path.join("data", "ocp-versions.json")
+            if os.path.exists(static_file_path):
+                with open(static_file_path, 'r') as f:
+                    data = json.load(f)
+                    releases = data.get("releases", [])
+                    app.logger.debug(f"Loaded {len(releases)} releases from static file")
+                    for release in releases:
+                        if re.match(r'^\d+\.\d+$', release):
+                            version_list.append(release)
+        except Exception as e:
+            app.logger.error(f"Error loading static OCP versions file: {e}")
+            
+    if not version_list:
+        app.logger.error("No valid OCP versions found to refresh channels")
+        return jsonify({
+            'status': 'error',
+            'message': 'No valid OCP versions found to refresh channels',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+
+
+    try:
+        for version in version_list:
+            app.logger.debug(f"Running oc-mirror to refresh channels for version {version}...")
+            result = subprocess.run(['oc-mirror', 'list', 'releases', '--channels','--version', version], capture_output=True, text=True, timeout=30)
+            
+            if result.returncode != 0:
+                app.logger.error(f"oc-mirror command failed for version {version}: {result.stderr}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Failed to refresh channels for version {version}',
+                    'error': result.stderr,
+                    'timestamp': datetime.now().isoformat()
+                }), 500
+                
+        
+            # Parse the output to extract channels
+            lines = result.stdout.strip().split('\n')
+        
+            for line in lines:
+                line = line.strip()
+                if re.match(r'^[A-Z,a-z]*\-\d.\d+$', line):  # Match semantic versioning
+                    if version not in channels:
+                        channels[version] = []
+                    channels[version].append(line)
+        
+        # Try to load from static file first
+        old_channels = {}
+        try:
+            if os.path.exists(static_file_path):
+                with open(static_file_path, 'r') as f:
+                    data = json.load(f)
+                old_channels = data.get("channels", {})
+        except Exception as e:
+            app.logger.warning(f"Could not load static OCP versions file: {e}")
+        
+        # Merge old channels with new ones
+        for version in version_list:
+            old_channels.update({version: channels.get(version, [])})
+
+        # Save to static file for future use
+        app.logger.debug(f"Saving refreshed channels to {static_file_path}")
+        with open(static_file_path, 'w') as f:
+            json.dump({
+                "channels": old_channels,
+                "count": len(old_channels),
+                "source": "oc-mirror",
+                "timestamp": datetime.now().isoformat()
+            }, f, indent=2)
+            
+    except Exception as e:
+        app.logger.error(f"Error refreshing channels: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to refresh channels: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+        
+    return jsonify({
+        'status': 'success',
+        'channels': channels,
+        'count': len(channels),
+        'timestamp': datetime.now().isoformat(),
+        'source': 'oc-mirror'
+    })
+
+@app.route('/api/operators/catalogs/<version>/refresh', methods=['POST'])
+def refresh_catalogs_for_version(version=None):
+    """Refresh available operator catalogs dynamically using oc-mirror"""
+    version_list = []
+    discovered_catalogs = {}
+    
+    try:
+        if version is not None:
+            # Extract major.minor version from version string
+            version_list.append(version)
+        else:
+            # If no version provided, refresh for all available versions
+            static_file_path = os.path.join("data", "ocp-versions.json")
+            if os.path.exists(static_file_path):
+                with open(static_file_path, 'r') as f:
+                    data = json.load(f)
+                    releases = data.get("releases", [])
+                    app.logger.debug(f"Loaded {len(releases)} releases from static file")
+                    for release in releases:
+                        if re.match(r'^\d+\.\d+$', release):
+                            version_list.append(release)
+
+        
+        for version in version_list:
+            # Extract major.minor version from version string
+            if '.' in version:
+                version_parts = version.split('.')
+                major = version_parts[0]
+                minor = version_parts[1]
+                version_key = f"{major}.{minor}"
+            else:
+                version_key = version
+            
+            app.logger.info(f"Discovering catalogs for OCP version {version_key}...")
+            
+            try:
+                app.logger.info(f"Discovering catalogs for OCP version {version_key}...")
+                
+                #Obtain available catalogs by running oc-mirror list operators --catalogs --version=<version>
+                cmd = ['oc-mirror', 'list', 'operators', '--catalogs', f'--version={version_key}']
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                
+                if result.returncode != 0:
+                    app.logger.error(f"oc-mirror command failed: {result.stderr}")
+                    return jsonify({
+                        'status': 'error',
+                        'message': f'Failed to discover catalogs: {result.stderr.strip()}',
+                        'timestamp': datetime.utcnow().isoformat()
+                    }), 500
+                    
+                # Parse the output to extract catalog names and URLs
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith('#') and not line.startswith('WARN') and not line.startswith('INFO'):
+                        # Assume the line contains a catalog URL that looks like registry.redhat.io/redhat/redhat-operator-index:v4.20
+                        if re.match(r'^Available OpenShift OperatorHub catalogs',line):
+                            continue  # Skip header lines
+                        if re.match(r'OpenShift \d\.\d+',line):
+                            continue  # Skip version header lines                            
+                        match = re.match(r'^(.*?)(:v\d+\.\d+)?$', line)
+                        if match:
+                            catalog_url = match.group(1)
+                            if "Invalid" in line:
+                                catalog_info = {
+                                    'name': catalog_url,
+                                    'description': 'Invalid catalog or Deprecated Catalog',
+                                    'default': False
+                                }
+                            else:
+                                catalog_info = return_base_catalog_info(catalog_url)
+                            if catalog_info:
+                                catalog_name = catalog_info['name']
+                                if version_key not in discovered_catalogs:
+                                    discovered_catalogs[version_key] = []
+                                discovered_catalogs[version_key].append({
+                                    'name': catalog_name,
+                                    'url': catalog_url,
+                                    'description': catalog_info['description'],
+                                    'default': catalog_info['default']
+                                })
+            except subprocess.TimeoutExpired:
+                app.logger.error(f"Timeout while discovering catalogs for version {version_key}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Timeout while discovering catalogs for version {version_key}',
+                    'timestamp': datetime.utcnow().isoformat()
+                }), 500
+                
+    except Exception as e:
+        app.logger.error(f"Error discovering catalogs: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to discover catalogs: {str(e)}',
+            'timestamp': datetime.utcnow().isoformat()
         }), 500
 
+    # Write Catalog info to File
+    try:
+        with open(f"data/catalogs-{version}.json", 'w') as f:
+            json.dump(discovered_catalogs, f, indent=2)
+    except Exception as e:
+        app.logger.warning(f"Could not save catalog file: {e}")
+
+    return jsonify({
+        'status': 'success',
+        'version': version,
+        'catalogs': discovered_catalogs,
+        'source': 'oc-mirror',
+        'timestamp': datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/versions/', methods=['GET'])
+def get_versions():
+    # Get available OCP releases using static files or oc-mirror
+    app.logger.debug("Fetching OCP releases...")
+    releases = []
+
+  
+    try:
+        # Try to load from static file first
+        static_file_path = os.path.join("data", "ocp-versions.json")
+        if os.path.exists(static_file_path):
+            with open(static_file_path, 'r') as f:
+                data = json.load(f)
+                releases = data.get("releases", [])
+                app.logger.debug(f"Loaded {len(releases)} releases from static file")
+    except Exception as e:
+        app.logger.error(f"Error loading static OCP versions file: {e}")
+
+
+
+    # If static file does not exist, run oc-mirror to get releases
+    if releases != []:
+            
+        app.logger.debug("Static file found, using cached releases")
+        return jsonify({
+            'status': 'success',
+            'releases': releases,
+            'count': len(releases),
+            'timestamp': datetime.now().isoformat(),
+            'source': 'static_file'
+        })
+        
+    release_update = refresh_versions()
+
+    if release_update.json.get("status") == "success":
+        releases = release_update.json.get("releases", [])
+        if channel:
+            releases = [r for r in releases if r.startswith(channel)]
+        return jsonify({
+            'status': 'success',
+            'releases': releases,
+            'count': len(releases),
+            'timestamp': datetime.now().isoformat(),
+            'source': 'oc-mirror'
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to fetch releases from oc-mirror',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route("/api/releases/<version>/<channel>", methods=["GET"])
+def get_ocp_releases(version, channel):
+    """Get available OCP releases for a specific version and channel using oc-mirror"""
+
+    if version is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Version parameter is required',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    if channel is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Channel parameter is required',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    #Check if version is in valid format
+    if not re.match(r'^\d+\.\d+$', version):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid version format. Expected format is X.Y (e.g., 4.14)',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    #Check if channel is in valid format
+    if not re.match(r'^[A-Za-z0-9\-]+\d+\.\d+$', channel):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid channel format. Expected alphanumeric characters and hyphens only',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    # Try to load from static file first
+    app.logger.debug(f"Checking static file for releases for version {version} and channel {channel}")
+    static_file_path = os.path.join("data", "channel-releases.json")
+
+    try:
+        with open(static_file_path, 'r') as f:
+            data = json.load(f)
+        channel_releases = data.get("channel_releases", {}).get(channel, [])
+        if channel_releases:
+            return jsonify({
+                'status': 'success',
+                'version': version,
+                'channel': channel,
+                'releases': channel_releases,
+                'source': 'static_file',
+                'timestamp': datetime.now().isoformat()
+            })
+    except Exception as e:
+        app.logger.warning(f"Could not load static channel releases file: {e}")
+        
+    # If static file does not exist, run oc-mirror to get releases
+    try:
+        release_data = refresh_ocp_releases(version, channel)
+        if release_data.json.get("status") == "success":
+            return jsonify({
+                'status': 'success',
+                'version': version,
+                'channel': channel,
+                'releases': release_data.json.get("channel_releases", []),
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'No releases found for version {version} and channel {channel}',
+                'timestamp': datetime.now().isoformat()
+            }), 404
+    except Exception as e:
+        app.logger.error(f"Error getting OCP releases for version {version} and channel {channel}: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to get OCP releases for version {version} and channel {channel}: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route("/api/channels/<version>", methods=["GET"])
+def get_ocp_channels(version):
+    """Get available OCP channels for a specific version using oc-mirror"""
+    
+    if version is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Version parameter is required',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    if not re.match(r'^\d+\.\d+$', version):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid version format. Expected format is X.Y (e.g., 4.14)',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+        
+    static_file_path = os.path.join("data", f"ocp-channels.json")
+          
+    # Try to load from static file first
+    try:
+        if os.path.exists(static_file_path):
+            with open(static_file_path, 'r') as f:
+                data = json.load(f)
+            channels = data.get("channels", [])
+            channel_data = channels.get(version, [])
+            if channel_data:
+                return jsonify({
+                    'status': 'success',
+                    'version': version,
+                    'channels': channel_data,
+                    'source': 'static_file',
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+    except Exception as e:
+        app.logger.warning(f"Could not load static OCP versions file: {e}")
+                 
+    # If static file does not exist, run oc-mirror to get channels
+    try:
+        channel_data = refresh_ocp_channels(version)
+        if channel_data.json.get("status") == "success":
+            channels = channel_data.json.get("channels", {})
+            if version in channels:
+                return jsonify({
+                    'status': 'success',
+                    'version': version,
+                    'channels': channels[version],
+                    'source': 'oc-mirror',
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'No channels found for version {version}',
+                    'timestamp': datetime.utcnow().isoformat()
+                }), 404
+    except Exception as e:
+        app.logger.error(f"Error running oc-mirror to get channels for version {version}: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to get OCP channels for version {version}: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+        
 
 @app.route('/api/operators/mappings', methods=['GET'])
 def get_operator_mappings():
@@ -286,76 +923,70 @@ def get_operator_mappings():
 
 @app.route('/api/operators/catalogs/<version>', methods=['GET'])
 def get_operator_catalogs(version):
-    """Get operator catalog URL for a specific OCP version"""
-    try:
-        # Extract major.minor version from version string
-        if '.' in version:
-            version_parts = version.split('.')
-            major = version_parts[0]
-            minor = version_parts[1]
-            version_key = f"{major}.{minor}"
-        else:
-            version_key = version
-        
-        # Define operator catalog mappings by OCP version
-        catalog_mappings = {
-            "4.30": "registry.redhat.io/redhat/redhat-operator-index:v4.30",
-            "4.29": "registry.redhat.io/redhat/redhat-operator-index:v4.29",
-            "4.28": "registry.redhat.io/redhat/redhat-operator-index:v4.28",
-            "4.27": "registry.redhat.io/redhat/redhat-operator-index:v4.27",
-            "4.26": "registry.redhat.io/redhat/redhat-operator-index:v4.26",
-            "4.25": "registry.redhat.io/redhat/redhat-operator-index:v4.25",
-            "4.24": "registry.redhat.io/redhat/redhat-operator-index:v4.24",
-            "4.23": "registry.redhat.io/redhat/redhat-operator-index:v4.23",
-            "4.22": "registry.redhat.io/redhat/redhat-operator-index:v4.22",
-            "4.21": "registry.redhat.io/redhat/redhat-operator-index:v4.21",
-            "4.20": "registry.redhat.io/redhat/redhat-operator-index:v4.20",
-            "4.19": "registry.redhat.io/redhat/redhat-operator-index:v4.19", 
-            "4.18": "registry.redhat.io/redhat/redhat-operator-index:v4.18",
-            "4.17": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
-            "4.16": "registry.redhat.io/redhat/redhat-operator-index:v4.16",
-            "4.15": "registry.redhat.io/redhat/redhat-operator-index:v4.15",
-            "4.14": "registry.redhat.io/redhat/redhat-operator-index:v4.14",
-            "4.13": "registry.redhat.io/redhat/redhat-operator-index:v4.13",
-            "4.12": "registry.redhat.io/redhat/redhat-operator-index:v4.12",
-            "4.11": "registry.redhat.io/redhat/redhat-operator-index:v4.11",
-            "4.10": "registry.redhat.io/redhat/redhat-operator-index:v4.10",
-            "4.9": "registry.redhat.io/redhat/redhat-operator-index:v4.9",
-            "4.8": "registry.redhat.io/redhat/redhat-operator-index:v4.8",
-            "4.7": "registry.redhat.io/redhat/redhat-operator-index:v4.7",
-            "4.6": "registry.redhat.io/redhat/redhat-operator-index:v4.6",
-            "4.5": "registry.redhat.io/redhat/redhat-operator-index:v4.5",
-            "4.4": "registry.redhat.io/redhat/redhat-operator-index:v4.4",
-            "4.3": "registry.redhat.io/redhat/redhat-operator-index:v4.3",
-            "4.2": "registry.redhat.io/redhat/redhat-operator-index:v4.2",
-            "4.1": "registry.redhat.io/redhat/redhat-operator-index:v4.1",
-            "4.0": "registry.redhat.io/redhat/redhat-operator-index:v4.0"
-        }
-        
-        # Get catalog URL or default to latest
-        catalog_url = catalog_mappings.get(version_key, "registry.redhat.io/redhat/redhat-operator-index")
-        
-        return jsonify({
-            'status': 'success',
-            'version': version,
-            'catalog': catalog_url,
-            'timestamp': datetime.utcnow().isoformat()
-        })
-        
-    except Exception as e:
-        app.logger.error(f"Error getting operator catalog for version {version}: {e}")
+    """Get operator catalog data for a specific OCP version from static file or oc-mirror"""
+
+    # Extract major.minor version from version string
+    if '.' in version:
+        version_parts = version.split('.')
+        major = version_parts[0]
+        minor = version_parts[1]
+        version_key = f"{major}.{minor}"
+    else:
+        version_key = version
+
+    static_file = os.path.join('data', f'catalogs-{version_key}.json')
+
+    # Try to load from static file first
+    if os.path.exists(static_file):
+        try:
+            with open(static_file, 'r') as f:
+                catalogs = json.load(f)
+            return jsonify({
+                'status': 'success',
+                'version': version,
+                'catalogs': catalogs,
+                'source': 'static_file',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        except Exception as e:
+            app.logger.warning(f"Could not load static catalog file: {e}")
+
+    # If static file does not exist, run oc-mirror to obtain it
+    catalogs = refresh_catalogs_for_version(version)
+    if catalogs.json.get("status") != "success":
+        app.logger.error(f"Failed to get catalogs for version {version}: {catalogs.json.get('message')}")
         return jsonify({
             'status': 'error',
-            'message': f'Failed to get operator catalog: {str(e)}',
+            'message': f'Failed to get operator catalogs for version {version}: {catalogs.json.get("message")}',
             'timestamp': datetime.utcnow().isoformat()
         }), 500
+
+    # If oc-mirror was successful, save the catalogs
+    available_catalogs = catalogs.json.get("data", [])
+    if not available_catalogs:
+        app.logger.warning(f"No catalogs found for version {version}")
+        return jsonify({
+            'status': 'error',
+            'message': f'No operator catalogs found for version {version}',
+            'timestamp': datetime.utcnow().isoformat()
+        }), 404
+
+    return jsonify({
+        'status': 'success',
+        'version': version,
+        'catalogs': available_catalogs,
+        'source': 'oc-mirror',
+        'timestamp': datetime.utcnow().isoformat()
+    })
 
 
 @app.route('/api/operators/catalogs', methods=['GET'])
 def get_available_catalogs():
     """Get all available operator catalogs using oc-mirror"""
+    return None
     try:
         import subprocess
+        import json
         
         # Define standard catalog URLs to check
         standard_catalogs = [
@@ -388,7 +1019,7 @@ def get_available_catalogs():
             try:
                 # Test if oc-mirror can access this catalog
                 cmd = ['oc-mirror', 'list', 'operators', '--catalogs', catalog['url']]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                 
                 catalog_info = catalog.copy()
                 if result.returncode == 0:
@@ -433,232 +1064,41 @@ def get_available_catalogs():
 @app.route('/api/operators/catalogs/<version>/list', methods=['GET'])
 def list_catalogs_for_version(version):
     """Use oc-mirror to list available catalogs for a specific OCP version"""
-    try:
-        import subprocess
-        
-        # Extract major.minor version from version string
-        if '.' in version:
-            version_parts = version.split('.')
-            major = version_parts[0]
-            minor = version_parts[1]
-            version_key = f"{major}.{minor}"
-        else:
-            version_key = version
-        
-        # Define base catalog URLs to test with this version
-        base_catalogs = [
-            {
-                "name": "Red Hat Operators",
-                "base_url": "registry.redhat.io/redhat/redhat-operator-index",
-                "description": "Official Red Hat certified operators",
-                "default": True
-            },
-            {
-                "name": "Community Operators",
-                "base_url": "registry.redhat.io/redhat/community-operator-index",
-                "description": "Community-maintained operators",
-                "default": False
-            },
-            {
-                "name": "Certified Operators", 
-                "base_url": "registry.redhat.io/redhat/certified-operator-index",
-                "description": "Third-party certified operators",
-                "default": False
-            },
-            {
-                "name": "Red Hat Marketplace",
-                "base_url": "registry.redhat.io/redhat/redhat-marketplace-index",
-                "description": "Commercial operators from Red Hat Marketplace",
-                "default": False
-            }
-        ]
-        
-        available_catalogs = []
-        
-        for catalog in base_catalogs:
-            # Create versioned catalog URL
-            versioned_url = f"{catalog['base_url']}:v{version_key}"
-            
-            catalog_info = {
-                "name": catalog['name'],
-                "url": versioned_url,
-                "description": f"{catalog['description']} for OCP {version_key}",
-                "default": catalog['default'],
-                "validated": False,
-                "operators_count": 0
-            }
-            
-            try:
-                # Use oc-mirror to validate and get operator count for this catalog
-                app.logger.info(f"Checking catalog {versioned_url} with oc-mirror...")
-                cmd = ['oc-mirror', 'list', 'operators', '--catalogs', versioned_url, '--version', version_key]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                
-                if result.returncode == 0:
-                    catalog_info['validated'] = True
-                    
-                    # Try to parse operator count from output
-                    lines = result.stdout.strip().split('\n')
-                    operator_lines = [line for line in lines if line.strip() and not line.startswith('#') and not line.startswith('WARN') and not line.startswith('INFO')]
-                    catalog_info['operators_count'] = len(operator_lines)
-                    
-                    app.logger.info(f"Successfully validated {versioned_url} with {catalog_info['operators_count']} operators")
-                else:
-                    app.logger.warning(f"oc-mirror failed for {versioned_url}: {result.stderr}")
-                    catalog_info['error'] = result.stderr.strip() if result.stderr else 'Unknown error'
-                
-            except subprocess.TimeoutExpired:
-                app.logger.warning(f"Timeout while checking {versioned_url}")
-                catalog_info['error'] = 'Timeout while validating'
-                
-            except Exception as e:
-                app.logger.warning(f"Error checking {versioned_url}: {e}")
-                catalog_info['error'] = str(e)
-            
-            available_catalogs.append(catalog_info)
-        
-        # Sort catalogs by validation status and operator count
-        available_catalogs.sort(key=lambda x: (not x['validated'], -x['operators_count'], x['name']))
-        
+
+    #Check if catalogs for this version are cached
+    cached_catalogs = load_catalogs_from_file(version)
+    
+    if cached_catalogs is not None:
         return jsonify({
             'status': 'success',
             'version': version,
-            'catalogs': available_catalogs,
-            'count': len(available_catalogs),
+            'catalogs': cached_catalogs,
+            'source': 'static_file',
             'timestamp': datetime.utcnow().isoformat()
         })
         
-    except Exception as e:
-        app.logger.error(f"Error listing catalogs for version {version}: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Failed to list catalogs: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 500
-
-
-@app.route('/api/operators/catalogs/<version>/discover', methods=['GET'])
-def discover_catalogs_for_version(version):
-    """Discover available operator catalogs dynamically using oc-mirror"""
-    try:
-        import subprocess
-        
-        # Extract major.minor version from version string
-        if '.' in version:
-            version_parts = version.split('.')
-            major = version_parts[0]
-            minor = version_parts[1]
-            version_key = f"{major}.{minor}"
-        else:
-            version_key = version
-        
-        discovered_catalogs = []
-        
-        try:
-            # First, try to discover what catalogs are available by running oc-mirror help
-            # or by checking known registry endpoints
-            app.logger.info(f"Discovering catalogs for OCP version {version_key}...")
-            
-            # Try some common catalog discovery approaches
-            discovery_commands = [
-                # Try to list available catalogs (this might not work in all oc-mirror versions)
-                ['oc-mirror', 'list', 'operators', '--help'],
-            ]
-            
-            # Since oc-mirror doesn't have a direct catalog discovery command,
-            # we'll use a heuristic approach to test known registry patterns
-            common_registries = [
-                "registry.redhat.io/redhat",
-                "quay.io/operatorhubio", 
-                "registry.connect.redhat.com"
-            ]
-            
-            common_catalog_types = [
-                "redhat-operator-index",
-                "community-operator-index", 
-                "certified-operator-index",
-                "redhat-marketplace-index"
-            ]
-            
-            for registry in common_registries:
-                for catalog_type in common_catalog_types:
-                    catalog_url = f"{registry}/{catalog_type}:v{version_key}"
-                    
-                    try:
-                        # Test if this catalog exists and contains operators
-                        cmd = ['oc-mirror', 'list', 'operators', '--catalogs', catalog_url, '--version', version_key]
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-                        
-                        if result.returncode == 0:
-                            # Parse the output to count operators
-                            lines = result.stdout.strip().split('\n')
-                            operator_lines = [line for line in lines if line.strip() and 
-                                            not line.startswith('#') and 
-                                            not line.startswith('WARN') and 
-                                            not line.startswith('INFO') and
-                                            not line.startswith('Error') and
-                                            not line.startswith('Failed')]
-                            
-                            if len(operator_lines) > 0:
-                                catalog_info = {
-                                    "name": catalog_type.replace('-', ' ').title(),
-                                    "url": catalog_url,
-                                    "description": f"Operators from {registry}/{catalog_type}",
-                                    "validated": True,
-                                    "operators_count": len(operator_lines),
-                                    "registry": registry,
-                                    "default": catalog_type == "redhat-operator-index" and registry == "registry.redhat.io/redhat"
-                                }
-                                
-                                discovered_catalogs.append(catalog_info)
-                                app.logger.info(f"Discovered catalog: {catalog_url} with {len(operator_lines)} operators")
-                        
-                    except subprocess.TimeoutExpired:
-                        app.logger.debug(f"Timeout testing catalog: {catalog_url}")
-                        continue
-                    except Exception as e:
-                        app.logger.debug(f"Error testing catalog {catalog_url}: {e}")
-                        continue
-            
-            # Sort by operator count (descending) and then by name
-            discovered_catalogs.sort(key=lambda x: (-x['operators_count'], x['name']))
-            
-            return jsonify({
-                'status': 'success',
-                'version': version,
-                'catalogs': discovered_catalogs,
-                'count': len(discovered_catalogs),
-                'discovery_method': 'oc-mirror_heuristic',
-                'timestamp': datetime.utcnow().isoformat()
-            })
-            
-        except Exception as e:
-            app.logger.error(f"Error during catalog discovery: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': f'Catalog discovery failed: {str(e)}',
-                'timestamp': datetime.utcnow().isoformat()
-            }), 500
-        
-    except Exception as e:
-        app.logger.error(f"Error discovering catalogs for version {version}: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Failed to discover catalogs: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 500
+    # If not cached, discover catalogs dynamically
+    return refresh_catalogs_for_version(version)
 
 
 @app.route('/api/operators/list', methods=['GET'])
 def get_operators_list():
-    """Get list of available operators from a catalog using oc-mirror"""
+    """Get list of available operators from cache files"""
     try:
-        import subprocess
+        # Get parameters from query string return none if not provided
+        catalog = request.args.get('catalog')
+        version = request.args.get('version')
         
-        # Get parameters from query string
-        catalog = request.args.get('catalog', 'registry.redhat.io/redhat/redhat-operator-index')
-        version = request.args.get('version', '4.18')
+        if not catalog:
+            return jsonify({
+                'status': 'error',
+                'message': 'Catalog and version parameters are required'
+            }), 400
         
+        #Extract version from catalog if empty
+        if version is None:
+            version = catalog.split(':')[-1]
+
         # Extract major.minor version from version string
         if '.' in version:
             version_parts = version.split('.')
@@ -668,94 +1108,27 @@ def get_operators_list():
         else:
             version_key = version
         
-        # Create versioned catalog URL if not already versioned
-        if ':v' not in catalog:
-            catalog_url = f"{catalog}:v{version_key}"
-        else:
-            catalog_url = catalog
-        
-        app.logger.info(f"Fetching operators from catalog {catalog_url} for version {version_key}")
-        
-        # Run oc-mirror command to list operators
-        cmd = ['oc-mirror', 'list', 'operators', '--catalogs', catalog_url, '--version', version_key]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        
-        if result.returncode != 0:
-            app.logger.error(f"oc-mirror failed: {result.stderr}")
-            return jsonify({
-                'status': 'error',
-                'message': f'Failed to fetch operators: {result.stderr}',
-                'timestamp': datetime.utcnow().isoformat()
-            }), 500
-        
-        # Parse the output to extract operator information
-        operators = []
-        lines = result.stdout.strip().split('\n')
-        
-        for line in lines:
-            line = line.strip()
-            # Skip empty lines, warnings, and headers
-            if (line and 
-                not line.startswith('#') and 
-                not line.startswith('WARN') and 
-                not line.startswith('INFO') and
-                not line.startswith('Error') and
-                not line.startswith('Failed') and
-                not line.startswith('Listing') and
-                not line.startswith('Using')):
-                
-                # Try to parse operator information
-                # oc-mirror output format can vary, but typically includes operator name
-                parts = line.split()
-                if len(parts) >= 1:
-                    operator_name = parts[0]
-                    
-                    # Extract additional info if available (channel, version, etc.)
-                    operator_info = {
-                        'name': operator_name,
-                        'display_name': operator_name.replace('-', ' ').title(),
-                        'description': f'Operator from {catalog_url}',
-                        'catalog': catalog_url,
-                        'version': version_key
-                    }
-                    
-                    # Try to extract channel information if present
-                    if len(parts) >= 2:
-                        operator_info['default_channel'] = parts[1]
-                    
-                    operators.append(operator_info)
-        
-        # Remove duplicates and sort by name
-        unique_operators = {}
-        for op in operators:
-            if op['name'] not in unique_operators:
-                unique_operators[op['name']] = op
-        
-        sorted_operators = sorted(unique_operators.values(), key=lambda x: x['name'])
-        
-        app.logger.info(f"Found {len(sorted_operators)} operators in catalog {catalog_url}")
-        
+
+
+        #Read static file path for operators
+        operators = load_operators_from_file(catalog, version_key)
+
+        if operators is None:
+            app.logger.info(f"No cached operators found for {catalog}:{version_key}, running refresh...")
+            #Run Refresh on File
+            operators=refresh_ocp_operators(catalog=catalog, version=version_key)
+
+        # Return the operators list
         return jsonify({
             'status': 'success',
-            'catalog': catalog_url,
-            'version': version_key,
-            'operators': sorted_operators,
-            'count': len(sorted_operators),
+            'operators': operators,
             'timestamp': datetime.utcnow().isoformat()
         })
-        
-    except subprocess.TimeoutExpired:
-        app.logger.error("Timeout while fetching operators")
-        return jsonify({
-            'status': 'error',
-            'message': 'Request timeout while fetching operators',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 504
     except Exception as e:
-        app.logger.error(f"Error fetching operators: {e}")
+        app.logger.error(f"Error loading operators from cache: {e}")
         return jsonify({
             'status': 'error',
-            'message': f'Failed to fetch operators: {str(e)}',
+            'message': f'Failed to load operators: {str(e)}',
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
@@ -765,6 +1138,7 @@ def get_operator_channels(operator_name):
     """Get available channels for a specific operator using oc-mirror"""
     try:
         import subprocess
+        import json
         
         # Get parameters from query string
         catalog = request.args.get('catalog', 'registry.redhat.io/redhat/redhat-operator-index')
@@ -789,7 +1163,7 @@ def get_operator_channels(operator_name):
         
         # Run oc-mirror command to list operator details
         cmd = ['oc-mirror', 'list', 'operators', '--catalogs', catalog_url, '--version', version_key, operator_name]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         
         if result.returncode != 0:
             app.logger.warning(f"oc-mirror failed for operator channels: {result.stderr}")
@@ -1120,3 +1494,86 @@ if __name__ == '__main__':
     print(f"Access the application at: http://{args.host}:{args.port}")
     
     app.run(host=args.host, port=args.port, debug=args.debug)
+
+
+@app.route("/api/ocp-versions", methods=["GET"])
+def get_ocp_versions_static():
+    """Get OCP versions from static file"""
+    try:
+        static_file_path = os.path.join("data", "ocp-versions.json")
+        if os.path.exists(static_file_path):
+            with open(static_file_path, "r") as f:
+                data = json.load(f)
+                return jsonify({
+                    "status": "success",
+                    "message": "OCP versions from static file",
+                    "releases": data.get("releases", []),
+                    "available_versions": data.get("releases", []),
+                    "count": data.get("count", 0),
+                    "source": data.get("source", "static_file"),
+                    "timestamp": datetime.now().isoformat()
+                })
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": "Static OCP versions file not found",
+                "timestamp": datetime.now().isoformat()
+            }), 404
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Error reading OCP versions: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+
+@app.route("/api/refresh/all", methods=["POST"])
+def refresh_all_static_data():
+    """
+    Refresh all static data files by calling oc-mirror for:
+    - OCP releases
+    - Operator catalogs for all known OCP versions
+    """
+    import json
+    import subprocess
+
+    results = {}
+
+    # 1. Refresh OCP releases
+    try:
+        releases_resp = refresh_versions()
+        results['ocp_releases'] = releases_resp.get_json() if hasattr(releases_resp, 'get_json') else releases_resp
+    except Exception as e:
+        results['ocp_releases'] = {'status': 'error', 'error': str(e)}
+
+    # 2. Refresh operator catalogs for all known OCP versions
+    try:
+        static_file_path = os.path.join("data", "ocp-versions.json")
+        versions = []
+        if os.path.exists(static_file_path):
+            with open(static_file_path, "r") as f:
+                data = json.load(f)
+                versions = data.get("releases", [])
+        else:
+            # fallback: try a few recent versions
+            versions = ["4.20", "4.19", "4.18", "4.17"]
+
+        catalog_results = {}
+        for version in versions:
+            try:
+                # Call the get_operator_catalogs logic directly
+                with app.test_request_context():
+                    resp = get_operator_catalogs(version)
+                    catalog_results[version] = resp.get_json() if hasattr(resp, 'get_json') else resp
+            except Exception as e:
+                catalog_results[version] = {'status': 'error', 'error': str(e)}
+        results['operator_catalogs'] = catalog_results
+    except Exception as e:
+        results['operator_catalogs'] = {'status': 'error', 'error': str(e)}
+
+    return jsonify({
+        "status": "success",
+        "message": "All static data refreshed",
+        "results": results,
+        "timestamp": datetime.now().isoformat()
+    })

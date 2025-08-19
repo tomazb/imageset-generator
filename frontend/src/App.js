@@ -12,8 +12,10 @@ import {
   PageSectionVariants,
   Alert,
   AlertGroup,
-  AlertActionCloseButton
+  AlertActionCloseButton,
+  Button
 } from '@patternfly/react-core';
+import SyncAltIcon from '@patternfly/react-icons/dist/esm/icons/sync-alt-icon';
 import '@patternfly/patternfly/patternfly.css';
 import BasicConfig from './components/BasicConfig';
 import AdvancedConfig from './components/AdvancedConfig';
@@ -50,11 +52,37 @@ function App() {
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState(false);
   const [isLoadingChannelReleases, setIsLoadingChannelReleases] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState('');
 
   const updateConfig = (updates) => {
     setConfig(prev => ({ ...prev, ...updates }));
   };
 
+  const fetchReleasesForChannelAndVersion = async (channel) => {
+    // Extract the version from the current channel (e.g., "stable-4.14" → "4.14")
+    const version = channel.split('-')[1] || config.ocp_channel.split('-')[1];
+    console.log(`Fetching releases for channel: ${channel}, version: ${version}`);
+
+    if (!channel || !version) return;
+    setIsLoadingChannelReleases(true);
+    try {
+      const response = await axios.get(`${API_BASE}/api/releases/${version}/${channel}`);
+      if (response.data.status === 'success') {
+        console.log(`Releases for ${channel}:`, response.data.releases);
+        setChannelReleases(response.data.releases);
+      } else {
+        console.error('Failed to fetch releases:', response.data.message);
+        setChannelReleases([]);
+      }
+    } catch (error) {
+      console.error('Failed to load releases:', error);
+      setChannelReleases([]);
+    } finally {
+      setIsLoadingChannelReleases(false);
+    }
+  };
+  
   const fetchChannelsForVersion = async (version) => {
     if (!version) return;
     setIsLoadingChannels(true);
@@ -68,22 +96,6 @@ function App() {
       setOcpChannels([`stable-${version}`, `fast-${version}`, `candidate-${version}`]);
     } finally {
       setIsLoadingChannels(false);
-    }
-  };
-
-  const fetchReleasesForChannel = async (channel) => {
-    if (!channel) return;
-    setIsLoadingChannelReleases(true);
-    try {
-      const response = await axios.get(`${API_BASE}/api/releases/${channel}`);
-      if (response.data.status === 'success') {
-        setChannelReleases(response.data.releases);
-      }
-    } catch (error) {
-      console.error('Failed to load channel releases:', error);
-      setChannelReleases([]);
-    } finally {
-      setIsLoadingChannelReleases(false);
     }
   };
 
@@ -139,13 +151,25 @@ function App() {
     }
   };
 
+  const handleRefreshAll = async () => {
+    setIsRefreshing(true);
+    setRefreshStatus('Refreshing all static data...');
+    try {
+      const resp = await axios.post('/api/refresh/all');
+      setRefreshStatus(resp.data.message || 'Refresh complete!');
+    } catch (err) {
+      setRefreshStatus('Refresh failed: ' + (err.response?.data?.error || err.message));
+    }
+    setIsRefreshing(false);
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoadingReleases(true);
       try {
         const [mappingsResponse, releasesResponse] = await Promise.all([
           axios.get(`${API_BASE}/api/operators/mappings`),
-          axios.get(`${API_BASE}/api/releases`)
+          axios.get(`${API_BASE}/api/versions`)
         ]);
         setOperatorMappings(mappingsResponse.data.mappings);
         if (releasesResponse.data.status === 'success') {
@@ -189,6 +213,20 @@ function App() {
       )}
 
       <PageSection>
+        <Button
+          variant="secondary"
+          icon={<SyncAltIcon />}
+          isLoading={isRefreshing}
+          isDisabled={isRefreshing}
+          onClick={handleRefreshAll}
+          style={{ marginBottom: '1rem' }}
+        >
+          Refresh All Data
+        </Button>
+        {refreshStatus && <div style={{ marginBottom: '1rem' }}>{refreshStatus}</div>}
+      </PageSection>
+
+      <PageSection>
         <Tabs
           activeKey={activeTab}
           onSelect={(event, tabIndex) => setActiveTab(tabIndex)}
@@ -202,7 +240,7 @@ function App() {
               ocpChannels={ocpChannels}
               channelReleases={channelReleases}
               onVersionChange={fetchChannelsForVersion}
-              onChannelChange={fetchReleasesForChannel}
+              onChannelChange={fetchReleasesForChannelAndVersion}
               isLoadingReleases={isLoadingReleases}
               isLoadingChannels={isLoadingChannels}
               isLoadingChannelReleases={isLoadingChannelReleases}

@@ -14,7 +14,7 @@ The OpenShift ImageSetConfiguration Generator now includes integration with the 
 ### API Endpoint
 A new REST API endpoint is available to fetch OCP releases programmatically:
 
-**Endpoint:** `GET /api/releases`
+**Endpoint:** `GET /api/versions`
 
 **Response Format:**
 ```json
@@ -51,7 +51,7 @@ A new REST API endpoint is available to fetch OCP releases programmatically:
   3. Starts the Flask application
 
 ### Backend Changes
-- **New API Route:** `/api/releases` in `app.py`
+- **New API Route:** `/api/versions` in `app.py`
 - **Subprocess Integration:** Uses Python's `subprocess` module to execute `oc-mirror`
 - **Error Handling:** Includes timeout handling and graceful error responses
 - **Response Parsing:** Automatically parses `oc-mirror` output into structured JSON
@@ -61,7 +61,7 @@ A new REST API endpoint is available to fetch OCP releases programmatically:
 ### Command Line Testing
 ```bash
 # Test the releases endpoint
-curl -s http://localhost:5000/api/releases | jq .
+curl -s http://localhost:5000/api/versions | jq .
 
 # Test application health
 curl -s http://localhost:5000/api/health | jq .
@@ -70,7 +70,7 @@ curl -s http://localhost:5000/api/health | jq .
 ### Frontend Integration
 The releases can be fetched from the React frontend:
 ```javascript
-fetch('/api/releases')
+fetch('/api/versions')
   .then(response => response.json())
   .then(data => {
     if (data.status === 'success') {

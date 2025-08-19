@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Red Hat Operators",
+    "url": "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+    "description": "Official Red Hat certified operators for OCP 4.14",
+    "validated": true,
+    "operators_count": 75,
+    "registry": "registry.redhat.io/redhat",
+    "default": true
+  },
+  {
+    "name": "Community Operators",
+    "url": "registry.redhat.io/redhat/community-operator-index:v4.14",
+    "description": "Community-maintained operators for OCP 4.14",
+    "validated": true,
+    "operators_count": 33,
+    "registry": "registry.redhat.io/redhat",
+    "default": false
+  },
+  {
+    "name": "Certified Operators",
+    "url": "registry.redhat.io/redhat/certified-operator-index:v4.14",
+    "description": "Third-party certified operators for OCP 4.14",
+    "validated": true,
+    "operators_count": 52,
+    "registry": "registry.redhat.io/redhat",
+    "default": false
+  },
+  {
+    "name": "Red Hat Marketplace",
+    "url": "registry.redhat.io/redhat/redhat-marketplace-index:v4.14",
+    "description": "Commercial operators from Red Hat Marketplace for OCP 4.14",
+    "validated": true,
+    "operators_count": 15,
+    "registry": "registry.redhat.io/redhat",
+    "default": false
+  }
+]

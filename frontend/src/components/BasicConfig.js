@@ -124,6 +124,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
     
     // Fetch releases for the selected channel
     if (onChannelChange && selectedValue) {
+      console.log(`Fetching releases for channel: ${selectedValue}`);
       onChannelChange(selectedValue);
     }
   };
@@ -200,7 +201,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                     value=""
                     label={isLoadingReleases ? 'Loading releases...' : 'Select a version...'}
                   />
-                  {ocpReleases.map(version => (
+                  {(ocpReleases || []).map(version => (
                     <FormSelectOption key={version} value={version} label={version} />
                   ))}
                 </FormSelect>
@@ -240,7 +241,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                             : 'Select a channel...'
                     }
                   />
-                  {ocpChannels.map(channel => (
+                  {(ocpChannels || []).map(channel => (
                     <FormSelectOption key={channel} value={channel} label={channel} />
                   ))}
                 </FormSelect>
@@ -252,8 +253,8 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                 helperText={
                   <HelperText>
                     <HelperTextItem>
-                      {config.ocp_channel && channelReleases.length > 0 && !isLoadingChannelReleases
-                        ? `${channelReleases.length} releases available for channel ${config.ocp_channel}`
+                      {config.ocp_channel && (channelReleases || []).length > 0 && !isLoadingChannelReleases
+                        ? `${(channelReleases || []).length} releases available for channel ${config.ocp_channel}`
                         : isLoadingChannelReleases
                           ? 'Loading releases for selected channel...'
                           : 'Releases will be loaded when you select a channel above'}
@@ -266,7 +267,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                   value={config.ocp_min_version || ''}
                   onChange={handleMinVersionChange}
                   id="ocp-min-version"
-                  isDisabled={!config.ocp_channel || isLoadingChannelReleases || channelReleases.length === 0}
+                  isDisabled={!config.ocp_channel || isLoadingChannelReleases || (channelReleases || []).length === 0}
                 >
                   <FormSelectOption
                     value=""
@@ -275,12 +276,12 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                         ? 'Select a channel first...' 
                         : isLoadingChannelReleases
                           ? 'Loading releases...'
-                          : channelReleases.length === 0 
+                          : (channelReleases || []).length === 0 
                             ? 'No releases available' 
                             : 'Select minimum version...'
                     }
                   />
-                  {channelReleases.map(release => (
+                  {(channelReleases || []).map(release => (
                     <FormSelectOption key={release} value={release} label={release} />
                   ))}
                 </FormSelect>
@@ -302,7 +303,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                   value={config.ocp_max_version || ''}
                   onChange={handleMaxVersionChange}
                   id="ocp-max-version"
-                  isDisabled={!config.ocp_channel || isLoadingChannelReleases || channelReleases.length === 0}
+                  isDisabled={!config.ocp_channel || isLoadingChannelReleases || (channelReleases || []).length === 0}
                 >
                   <FormSelectOption
                     value=""
@@ -311,12 +312,12 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                         ? 'Select a channel first...' 
                         : isLoadingChannelReleases
                           ? 'Loading releases...'
-                          : channelReleases.length === 0 
+                          : (channelReleases || []).length === 0 
                             ? 'No releases available' 
                             : 'Select maximum version...'
                     }
                   />
-                  {channelReleases.map(release => (
+                  {(channelReleases || []).map(release => (
                     <FormSelectOption key={release} value={release} label={release} />
                   ))}
                 </FormSelect>
@@ -324,15 +325,6 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
             </Form>
           </CardBody>
         </Card>
-      </GridItem>
-
-      <GridItem span={12}>
-        <OperatorSearch 
-          selectedOperators={config.operators || []}
-          onOperatorsChange={handleModernOperatorsChange}
-          selectedCatalogs={config.operator_catalogs || []}
-          selectedVersion={config.ocp_versions?.[0] || ''}
-        />
       </GridItem>
 
       <GridItem span={12}>
@@ -423,6 +415,15 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
           </CardBody>
         </Card>
       </GridItem>
+      <GridItem span={12}>
+        <OperatorSearch 
+          selectedOperators={config.operators || []}
+          onOperatorsChange={handleModernOperatorsChange}
+          selectedCatalogs={config.operator_catalogs || []}
+          selectedVersion={config.ocp_versions?.[0] || ''}
+        />
+      </GridItem>
+
 
       <GridItem span={12}>
         <Card>

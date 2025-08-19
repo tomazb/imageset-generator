@@ -102,7 +102,7 @@ disabled={isLoadingReleases || !hasRequiredData()}
 ```
 
 ## API Integration Points
-- `/api/releases` - OCP releases fetching with loading state
+- `/api/versions` - OCP releases fetching with loading state
 - `/api/channels/<version>` - Version-specific channels with loading state
 - `/api/generate/preview` - YAML generation with loading state
 

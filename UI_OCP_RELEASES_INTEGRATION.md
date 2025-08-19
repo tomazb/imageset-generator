@@ -1,7 +1,7 @@
 # UI Integration for OCP Releases
 
 ## Overview
-The frontend UI has been updated to automatically fetch and display available OpenShift Container Platform (OCP) releases from the `oc-mirror` tool via the `/api/releases` endpoint.
+The frontend UI has been updated to automatically fetch and display available OpenShift Container Platform (OCP) releases from the `oc-mirror` tool via the `/api/versions` endpoint.
 
 ## Changes Made
 
@@ -9,7 +9,7 @@ The frontend UI has been updated to automatically fetch and display available Op
 
 #### App.js
 - Added `ocpReleases` state to store fetched releases
-- Added `loadOcpReleases()` function that calls `/api/releases` endpoint
+- Added `loadOcpReleases()` function that calls `/api/versions` endpoint
 - Integrated releases fetching in `useEffect` on component mount
 - Added fallback releases if API call fails
 - Passed `ocpReleases` prop to `BasicConfig` component
@@ -58,7 +58,7 @@ The frontend UI has been updated to automatically fetch and display available Op
 ## Technical Implementation
 
 ### Data Flow
-1. App.js fetches releases from `/api/releases` on startup
+1. App.js fetches releases from `/api/versions` on startup
 2. Releases stored in `ocpReleases` state
 3. State passed to BasicConfig component as prop
 4. BasicConfig renders dropdowns using releases data

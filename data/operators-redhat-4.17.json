@@ -1,0 +1,162 @@
+[
+  {
+    "name": "advanced-cluster-management",
+    "display_name": "Advanced Cluster Management",
+    "description": "Red Hat Advanced Cluster Management for Kubernetes",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "release-2.10"
+  },
+  {
+    "name": "cluster-logging",
+    "display_name": "Red Hat OpenShift Logging",
+    "description": "Red Hat OpenShift Logging operator for cluster log management",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "compliance-operator",
+    "display_name": "Compliance Operator",
+    "description": "OpenShift Compliance Operator for security compliance scanning",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "elasticsearch-operator",
+    "display_name": "OpenShift Elasticsearch Operator",
+    "description": "Elasticsearch operator for OpenShift logging stack",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "jaeger-product",
+    "display_name": "Red Hat OpenShift distributed tracing platform",
+    "description": "Jaeger distributed tracing platform for OpenShift",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "kiali-ossm",
+    "display_name": "Kiali Operator",
+    "description": "Kiali observability console for service mesh",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "local-storage-operator",
+    "display_name": "Local Storage",
+    "description": "Local storage operator for persistent volumes",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "loki-operator",
+    "display_name": "Loki Operator",
+    "description": "Loki log aggregation system operator",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "odf-operator",
+    "display_name": "OpenShift Data Foundation",
+    "description": "Red Hat OpenShift Data Foundation storage operator",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable-4.15"
+  },
+  {
+    "name": "openshift-gitops-operator",
+    "display_name": "Red Hat OpenShift GitOps",
+    "description": "GitOps operator for continuous deployment",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "latest"
+  },
+  {
+    "name": "openshift-pipelines-operator-rh",
+    "display_name": "Red Hat OpenShift Pipelines",
+    "description": "Tekton-based CI/CD pipelines for OpenShift",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "latest"
+  },
+  {
+    "name": "ptp-operator",
+    "display_name": "PTP Operator",
+    "description": "Precision Time Protocol operator",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "quay-operator",
+    "display_name": "Red Hat Quay",
+    "description": "Red Hat Quay container registry operator",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable-3.11"
+  },
+  {
+    "name": "rhacs-operator",
+    "display_name": "Red Hat Advanced Cluster Security for Kubernetes",
+    "description": "Security platform for container and Kubernetes environments",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "serverless-operator",
+    "display_name": "Red Hat OpenShift Serverless",
+    "description": "Knative-based serverless platform for OpenShift",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "servicemeshoperator",
+    "display_name": "Red Hat OpenShift Service Mesh",
+    "description": "Istio-based service mesh for OpenShift",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "sriov-network-operator",
+    "display_name": "SR-IOV Network Operator",
+    "description": "SR-IOV network device plugin for high-performance networking",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  },
+  {
+    "name": "web-terminal",
+    "display_name": "Web Terminal",
+    "description": "Web-based terminal for OpenShift Console",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "fast"
+  },
+  {
+    "name": "amq-broker-rhel8",
+    "display_name": "Red Hat Integration - AMQ Broker for RHEL 8",
+    "description": "Message broker based on Apache ActiveMQ Artemis",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "7.11.x"
+  },
+  {
+    "name": "amq-streams",
+    "display_name": "Red Hat Integration - AMQ Streams",
+    "description": "Apache Kafka streaming platform",
+    "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+    "version": "4.17",
+    "default_channel": "stable"
+  }
+]
