@@ -33,6 +33,7 @@ function OperatorSearch({
   const [error, setError] = useState('');
   const [isChannelSelectOpen, setIsChannelSelectOpen] = useState({});
   const [operatorChannels, setOperatorChannels] = useState({});
+  const [operatorLimit, setOperatorLimit] = useState(25);
 
   // Define fetchOperators function FIRST before any useEffect that uses it
   const fetchOperators = useCallback(async () => {
@@ -73,15 +74,14 @@ function OperatorSearch({
   }, [selectedCatalogs, selectedVersion, fetchOperators]);
 
   useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredOperators(availableOperators);
-    } else {
-      const filtered = availableOperators.filter(op => 
+    let filtered = availableOperators;
+    if (searchTerm.trim() !== '') {
+      filtered = availableOperators.filter(op => 
         op.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (op.display_name && op.display_name.toLowerCase().includes(searchTerm.toLowerCase()))
       );
-      setFilteredOperators(filtered);
     }
+    setFilteredOperators(filtered);
   }, [searchTerm, availableOperators]);
 
   const addOperator = (operator) => {
@@ -171,11 +171,31 @@ function OperatorSearch({
 
           {!isLoading && filteredOperators.length > 0 && (
             <div style={{ marginTop: '16px' }}>
-              <Title headingLevel="h4" size="md" style={{ marginBottom: '8px' }}>
-                Available Operators ({filteredOperators.length})
-              </Title>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                <Title headingLevel="h4" size="md" style={{ marginBottom: 0, marginRight: '16px' }}>
+                  Available Operators ({filteredOperators.length > operatorLimit ? operatorLimit : filteredOperators.length}{filteredOperators.length > operatorLimit ? ` of ${filteredOperators.length}` : ''})
+                </Title>
+                <span style={{ marginLeft: 'auto', fontSize: '0.95em' }}>
+                  Show
+                  <TextInput
+                    type="number"
+                    min={1}
+                    max={filteredOperators.length}
+                    value={operatorLimit}
+                    onChange={(e, value) => {
+                      let v = parseInt(value, 10);
+                      if (isNaN(v) || v < 1) v = 1;
+                      if (v > filteredOperators.length) v = filteredOperators.length;
+                      setOperatorLimit(v);
+                    }}
+                    style={{ width: '60px', display: 'inline-block', margin: '0 8px' }}
+                    aria-label="Operator result limit"
+                  />
+                  operators
+                </span>
+              </div>
               <Grid hasGutter>
-                {filteredOperators.map((operator) => (
+                {filteredOperators.slice(0, operatorLimit).map((operator) => (
                   <GridItem span={12} md={6} lg={4} key={operator.name}>
                     <Card>
                       <CardBody>

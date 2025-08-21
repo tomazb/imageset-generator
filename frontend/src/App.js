@@ -173,7 +173,9 @@ function App() {
         ]);
         setOperatorMappings(mappingsResponse.data.mappings);
         if (releasesResponse.data.status === 'success') {
-          setOcpReleases(releasesResponse.data.releases);
+          // Ensure releases is always an array
+          const releases = Array.isArray(releasesResponse.data.releases) ? releasesResponse.data.releases : [];
+          setOcpReleases(releases);
         }
       } catch (error) {
         console.error('Failed to load data:', error);

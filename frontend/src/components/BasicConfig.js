@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card, CardTitle, CardBody,
   Form, FormGroup,
@@ -25,18 +25,23 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
       setAvailableCatalogs([]);
       return;
     }
-    
     setIsLoadingCatalogs(true);
     try {
       const response = await fetch(`/api/operators/catalogs/${version}/list`);
       const data = await response.json();
-      
+      let catalogs = [];
       if (data.status === 'success') {
-        setAvailableCatalogs(data.catalogs);
-        
+        if (Array.isArray(data.catalogs)) {
+          catalogs = data.catalogs;
+          console.log('Fetched catalogs (array):', catalogs);
+        } else if (data.catalogs && typeof data.catalogs === 'object') {
+          // Flatten all values into a single array
+          catalogs = Object.values(data.catalogs).flat();
+        }
+        setAvailableCatalogs(catalogs);
         // Auto-select the default catalog if no catalogs are currently selected
-        if (!config.operator_catalogs || config.operator_catalogs.length === 0) {
-          const defaultCatalogs = data.catalogs.filter(cat => cat.default).map(cat => cat.url);
+        if ((!config.operator_catalogs || config.operator_catalogs.length === 0) && Array.isArray(catalogs)) {
+          const defaultCatalogs = catalogs.filter(cat => cat.default).map(cat => cat.url);
           if (defaultCatalogs.length > 0) {
             updateConfig({ operator_catalogs: defaultCatalogs });
           }
@@ -53,17 +58,27 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
     }
   };
 
+  // Helper to check if a string is a valid URL (for registry URLs, allow without protocol)
+  const isValidCatalogUrl = (url) => {
+    if (typeof url !== 'string' || !url.trim()) return false;
+    // Accept registry URLs like registry.redhat.io/... optionally with :vX.XX
+    return /^registry\.[\w.-]+\/[\w.-]+\/[\w.-]+(-index)?(:v\d+\.\d+)?$/.test(url.trim());
+  };
+
   // Handle catalog selection changes
   const handleCatalogSelectionChange = (selection, isSelected) => {
-    const currentCatalogs = config.operator_catalogs || [];
+    const currentCatalogs = (config.operator_catalogs || []).filter(isValidCatalogUrl);
     let newCatalogs;
-    
     if (isSelected) {
-      newCatalogs = [...currentCatalogs, selection];
+      if (isValidCatalogUrl(selection)) {
+        newCatalogs = Array.from(new Set([...currentCatalogs, selection.trim()]));
+      } else {
+        console.warn('Attempted to add invalid catalog URL:', selection);
+        newCatalogs = [...currentCatalogs];
+      }
     } else {
       newCatalogs = currentCatalogs.filter(catalog => catalog !== selection);
     }
-    
     updateConfig({ operator_catalogs: newCatalogs });
   };
 
@@ -73,33 +88,36 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
     updateConfig({ ocp_versions: versions });
   };
 
+  // Track last selected version to allow re-selecting the same version
+  const lastSelectedVersion = useRef('');
   const handleSingleOcpVersionChange = (value, event) => {
-    // PatternFly FormSelect can pass either (value, event) or (event) depending on version
     let selectedValue;
-    
     if (typeof value === 'string') {
-      // New PatternFly API: (value, event)
       selectedValue = value;
     } else if (value && value.target) {
-      // Old PatternFly API or standard HTML: (event)
       selectedValue = value.target.value;
     } else {
-      // Fallback
       selectedValue = '';
     }
-    
+    // Always update config, even if the same version is selected again
     updateConfig({ ocp_versions: selectedValue ? [selectedValue] : [] });
-    
-    // Fetch channels for the selected version
+    lastSelectedVersion.current = selectedValue;
     if (onVersionChange && selectedValue) {
       onVersionChange(selectedValue);
     }
-    
-    // Fetch catalogs for the selected version
     if (selectedValue) {
       fetchCatalogsForVersion(selectedValue);
     }
   };
+
+  // If ocpReleases changes and the selected version is no longer present, reset selection
+  useEffect(() => {
+    if (Array.isArray(ocpReleases) && config.ocp_versions && config.ocp_versions[0]) {
+      if (!ocpReleases.includes(config.ocp_versions[0])) {
+        updateConfig({ ocp_versions: [] });
+      }
+    }
+  }, [ocpReleases]);
 
   const handleChannelChange = (value, event) => {
     // PatternFly FormSelect can pass either (value, event) or (event) depending on version
@@ -201,9 +219,9 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                     value=""
                     label={isLoadingReleases ? 'Loading releases...' : 'Select a version...'}
                   />
-                  {(ocpReleases || []).map(version => (
+                  {Array.isArray(ocpReleases) ? ocpReleases.slice().reverse().map(version => (
                     <FormSelectOption key={version} value={version} label={version} />
-                  ))}
+                  )) : null}
                 </FormSelect>
               </FormGroup>
 
@@ -241,9 +259,9 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                             : 'Select a channel...'
                     }
                   />
-                  {(ocpChannels || []).map(channel => (
+                  {Array.isArray(ocpChannels) ? ocpChannels.map(channel => (
                     <FormSelectOption key={channel} value={channel} label={channel} />
-                  ))}
+                  )) : null}
                 </FormSelect>
               </FormGroup>
 
@@ -281,9 +299,9 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                             : 'Select minimum version...'
                     }
                   />
-                  {(channelReleases || []).map(release => (
+                  {Array.isArray(channelReleases) ? channelReleases.map(release => (
                     <FormSelectOption key={release} value={release} label={release} />
-                  ))}
+                  )) : null}
                 </FormSelect>
               </FormGroup>
 
@@ -317,9 +335,9 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                             : 'Select maximum version...'
                     }
                   />
-                  {(channelReleases || []).map(release => (
+                  {Array.isArray(channelReleases) ? channelReleases.map(release => (
                     <FormSelectOption key={release} value={release} label={release} />
-                  ))}
+                  )) : null}
                 </FormSelect>
               </FormGroup>
             </Form>
@@ -398,9 +416,19 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                       </div>
                     ) : (
                       <TextInput
-                        value={(config.operator_catalogs || []).join(', ')}
+                        value={(config.operator_catalogs || []).filter(isValidCatalogUrl).join(', ')}
                         onChange={(value) => {
-                          const catalogs = value.split(',').map(c => c.trim()).filter(c => c.length > 0);
+                          const catalogs = value
+                            .split(',')
+                            .map(c => c.trim())
+                            .filter(isValidCatalogUrl);
+                          const invalids = value
+                            .split(',')
+                            .map(c => c.trim())
+                            .filter(c => c && !isValidCatalogUrl(c));
+                          if (invalids.length > 0) {
+                            console.warn('Ignored invalid catalog URLs:', invalids);
+                          }
                           updateConfig({ operator_catalogs: catalogs });
                         }}
                         id="operator-catalogs-manual"
@@ -425,28 +453,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
       </GridItem>
 
 
-      <GridItem span={12}>
-        <Card>
-          <CardTitle>
-            <Title headingLevel="h2">Output Configuration</Title>
-          </CardTitle>
-          <CardBody>
-            <Form>
-              <FormGroup
-                label="Output File Name"
-                fieldId="output-file"
-              >
-                <TextInput
-                  value={config.output_file || ''}
-                  onChange={(value) => updateConfig({ output_file: value })}
-                  id="output-file"
-                  placeholder="imageset-config.yaml"
-                />
-              </FormGroup>
-            </Form>
-          </CardBody>
-        </Card>
-      </GridItem>
+  {/* Output Configuration card removed as requested */}
     </Grid>
   );
 }

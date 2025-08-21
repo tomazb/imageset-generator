@@ -49,7 +49,19 @@ function PreviewGenerate({ config, yamlPreview, isGenerating, onGeneratePreview,
 
           {config.operators && config.operators.length > 0 && (
             <TextContent style={{ marginBottom: '1rem' }}>
-              <Text><strong>Operators:</strong> {config.operators.join(', ')}</Text>
+              <Text><strong>Operators:</strong></Text>
+              <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
+                {config.operators.map((op, idx) => (
+                  <li key={idx}>
+                    {typeof op === 'string' ? op : op.name}
+                    {op.channel && (
+                      <span style={{ color: '#6a6e73', marginLeft: 8 }}>
+                        (channel: {op.channel})
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
               <Text><strong>Catalogs:</strong> {
                 (config.operator_catalogs && config.operator_catalogs.length > 0) 
                   ? config.operator_catalogs.join(', ')

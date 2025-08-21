@@ -107,7 +107,7 @@ def load_operators_from_file(catalog_key, version_key):
         if os.path.exists(static_file_path):
             with open(static_file_path, 'r') as f:
                 data = json.load(f)
-                return data.get('operators', [])
+                return data.get('operators', None)
         
         return None
         
@@ -243,9 +243,11 @@ def refresh_ocp_operators(catalog=None, version=None):
     static_file_path_data = os.path.join("data", f"operators-{catalog_index}-{version}-data.json")
     static_file_path_channel = os.path.join("data", f"operators-{catalog_index}-{version}-channel.json")
 
+
+    #Get index file Example - opm render  --skip-tls registry.redhat.io/redhat/redhat-operator-index:v4.9 > redhat-operator-index.v4.9
     # Render the catalog and save to static files
     try:
-        if not os.path.exists(static_file_path_index):
+        if not os.path.exists(static_file_path_index) or os.path.getsize(static_file_path_index) == 0:
             with open(static_file_path_index, 'w') as f:
                 subprocess.run(['opm', 'render', catalog, '--skip-tls-verify','--output', 'json'], stdout=f, check=True)
     except subprocess.CalledProcessError as e:
@@ -278,7 +280,7 @@ def refresh_ocp_operators(catalog=None, version=None):
         ]
 
         try:
-            if not os.path.exists(static_file_path_data):
+            if not os.path.exists(static_file_path_data) or os.path.getsize(static_file_path_data) == 0:
                 with open(static_file_path_index, "r") as infile, open(static_file_path_data, "w") as outfile:
                     subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
         except subprocess.CalledProcessError as e:
@@ -300,7 +302,7 @@ def refresh_ocp_operators(catalog=None, version=None):
         ]
         
         try:
-            if not os.path.exists(static_file_path_channel):
+            if not os.path.exists(static_file_path_channel) or os.path.getsize(static_file_path_channel) == 0:
                 with open(static_file_path_index, "r") as infile, open(static_file_path_channel, "w") as outfile:
                     subprocess.run(cmd_channel, stdin=infile, stdout=outfile, check=True)
         except subprocess.CalledProcessError as e:
@@ -318,6 +320,8 @@ def refresh_ocp_operators(catalog=None, version=None):
                 data = f.read()
                 # Process the TSV data as needed
                 lines = data.strip().split('\n')
+                #Skip empty lines
+                lines = [line for line in lines if line.strip()]
                 for line in lines:
                     fields = line.split('\t')
                     # Do something with the fields
@@ -343,6 +347,7 @@ def refresh_ocp_operators(catalog=None, version=None):
                             channel_data = f.read()
                             # Process the channel data as needed
                             lines = channel_data.strip().split('\n')
+                            lines = [line for line in lines if line.strip()]
                             for line in lines:
                                 if fields[1] in line:
                                     channel_fields = line.split('\t')
@@ -1098,6 +1103,14 @@ def get_operators_list():
         #Extract version from catalog if empty
         if version is None:
             version = catalog.split(':')[-1]
+            
+        #if no version present in catalog append version value to catalog
+        if version is not None:
+            if re.match(r'^\d+\.\d+$', version):
+                # If version is in X.Y format, append it to catalog
+                if ':v' not in catalog:
+                    catalog = f"{catalog}:v{version}"
+
 
         # Extract major.minor version from version string
         if '.' in version:
@@ -1113,7 +1126,7 @@ def get_operators_list():
         #Read static file path for operators
         operators = load_operators_from_file(catalog, version_key)
 
-        if operators is None:
+        if operators is None or operators == []:
             app.logger.info(f"No cached operators found for {catalog}:{version_key}, running refresh...")
             #Run Refresh on File
             operators=refresh_ocp_operators(catalog=catalog, version=version_key)
@@ -1261,22 +1274,44 @@ def generate_preview():
         
         # Add operators
         if data.get('operators'):
-            operators = [op.strip() for op in data['operators'] if op.strip()]
-            
+            operators = []
+            channels = {}
+            for op in data['operators']:
+                if isinstance(op, str):
+                    op_name = op.strip()
+                    op_channel = None
+                elif isinstance(op, dict):
+                    op_name = op.get('name', '').strip() if 'name' in op and isinstance(op['name'], str) else ''
+                    op_channel = op.get('channel', '').strip() if 'channel' in op and isinstance(op['channel'], str) else None
+                else:
+                    op_name = ''
+                    op_channel = None
+                if op_name:
+                    operators.append(op_name)
+                    if op_channel:
+                        channels[op_name] = op_channel
             # Handle multiple catalogs (new format) or single catalog (backward compatibility)
             catalogs = data.get('operator_catalogs', [])
             if not catalogs and data.get('operator_catalog'):
                 catalogs = [data.get('operator_catalog')]
             if not catalogs:
                 catalogs = ['registry.redhat.io/redhat/redhat-operator-index']
-            
             # Add operators for each catalog
             for catalog in catalogs:
-                generator.add_operators(operators, catalog.strip())
+                generator.add_operators(operators, catalog.strip(), channels)
         
         # Add additional images
         if data.get('additional_images'):
-            images = [img.strip() for img in data['additional_images'] if img.strip()]
+            images = []
+            for img in data['additional_images']:
+                if isinstance(img, str):
+                    img_val = img.strip()
+                elif isinstance(img, dict):
+                    img_val = img.get('name', '').strip() if 'name' in img and isinstance(img['name'], str) else ''
+                else:
+                    img_val = ''
+                if img_val:
+                    images.append(img_val)
             generator.add_additional_images(images)
         
         # Add helm charts
@@ -1338,22 +1373,44 @@ def generate_download():
         
         # Add operators
         if data.get('operators'):
-            operators = [op.strip() for op in data['operators'] if op.strip()]
-            
+            operators = []
+            channels = {}
+            for op in data['operators']:
+                if isinstance(op, str):
+                    op_name = op.strip()
+                    op_channel = None
+                elif isinstance(op, dict):
+                    op_name = op.get('name', '').strip() if 'name' in op and isinstance(op['name'], str) else ''
+                    op_channel = op.get('channel', '').strip() if 'channel' in op and isinstance(op['channel'], str) else None
+                else:
+                    op_name = ''
+                    op_channel = None
+                if op_name:
+                    operators.append(op_name)
+                    if op_channel:
+                        channels[op_name] = op_channel
             # Handle multiple catalogs (new format) or single catalog (backward compatibility)
             catalogs = data.get('operator_catalogs', [])
             if not catalogs and data.get('operator_catalog'):
                 catalogs = [data.get('operator_catalog')]
             if not catalogs:
                 catalogs = ['registry.redhat.io/redhat/redhat-operator-index']
-            
             # Add operators for each catalog
             for catalog in catalogs:
-                generator.add_operators(operators, catalog.strip())
+                generator.add_operators(operators, catalog.strip(), channels)
         
         # Add additional images
         if data.get('additional_images'):
-            images = [img.strip() for img in data['additional_images'] if img.strip()]
+            images = []
+            for img in data['additional_images']:
+                if isinstance(img, str):
+                    img_val = img.strip()
+                elif isinstance(img, dict):
+                    img_val = img.get('name', '').strip() if 'name' in img and isinstance(img['name'], str) else ''
+                else:
+                    img_val = ''
+                if img_val:
+                    images.append(img_val)
             generator.add_additional_images(images)
         
         # Add helm charts
