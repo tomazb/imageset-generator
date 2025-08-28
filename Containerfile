@@ -15,21 +15,25 @@ COPY frontend/ ./
 # Build the application
 RUN npm run build
 
-FROM python:3.11-slim
+FROM registry.access.redhat.com/ubi9/ubi-minimal
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Enable additional repositories and install Python
+RUN microdnf -y install \
+    --enablerepo=ubi-9-baseos-rpms \
+    --enablerepo=ubi-9-appstream-rpms \
+    python3.11 \
+    python3.11-pip \
     gcc \
-    curl \
-    wget \
     tar \
-    libgpgme11 \
-    libassuan0 \
-    libdevmapper1.02.1 \
-    && rm -rf /var/lib/apt/lists/*
+    wget \
+    gpgme \
+    libassuan \
+    device-mapper-libs \
+    shadow-utils \
+    && microdnf clean all
 
 # Download and install oc-mirror tool
 RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest-4.18/oc-mirror.tar.gz \
@@ -40,10 +44,14 @@ RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest
 
 # Copy Python requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Create data directory
+RUN mkdir -p /app/data
+
+# Copy application code and data
 COPY . .
+COPY data/ /app/data/
 
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
