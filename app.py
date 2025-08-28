@@ -264,7 +264,6 @@ def refresh_ocp_operators(catalog=None, version=None):
     if os.path.exists(static_file_path_index):
         jq_filter = '''
         select(.schema == "olm.bundle")
-        | select([.properties[]? | select(.type == "olm.maxOpenShiftVersion")] == [])
         | [
             .package,
             .name,
@@ -328,13 +327,13 @@ def refresh_ocp_operators(catalog=None, version=None):
                     if len(fields) < 5:
                         operator_output.append({
                             "package": fields[0],
-                            "name": fields[1],
+                            "name": fields[0],
                             "version": fields[2]
                         })
                     if len(fields) >= 5:
                         operator_output.append({
                             "package": fields[0],
-                            "name": fields[1],
+                            "name": fields[0],
                             "version": fields[2],
                             "keywords": fields[3].split(",") if fields[3] else [],
                             "description": fields[4],
@@ -372,14 +371,20 @@ def refresh_ocp_operators(catalog=None, version=None):
                 "timestamp": datetime.now().isoformat()
             }, f, indent=2)
 
+        #Remove intermediate files
+        try:
+            os.remove(static_file_path_index)
+            os.remove(static_file_path_channel)
+            os.remove(static_file_path_data)
+        except Exception as e:
+            app.logger.error(f"Error removing intermediate files: {e}")
+
         #return operator_output
         return jsonify({
             'status': 'success',
             'data': operator_output,
             'timestamp': datetime.now().isoformat()
         })
-
- 
 
 @app.route('/api/releases/refresh', methods=['POST'])
 def refresh_ocp_releases(version=None, channel=None):
@@ -720,7 +725,6 @@ def get_versions():
 
     # If static file does not exist, run oc-mirror to get releases
     if releases != []:
-            
         app.logger.debug("Static file found, using cached releases")
         return jsonify({
             'status': 'success',
@@ -729,13 +733,11 @@ def get_versions():
             'timestamp': datetime.now().isoformat(),
             'source': 'static_file'
         })
-        
+
     release_update = refresh_versions()
 
     if release_update.json.get("status") == "success":
         releases = release_update.json.get("releases", [])
-        if channel:
-            releases = [r for r in releases if r.startswith(channel)]
         return jsonify({
             'status': 'success',
             'releases': releases,
@@ -1274,31 +1276,50 @@ def generate_preview():
         
         # Add operators
         if data.get('operators'):
-            operators = []
+            # Group operators by catalog and version, preserving version and channel
+            catalog_to_operators = {}
             channels = {}
             for op in data['operators']:
                 if isinstance(op, str):
                     op_name = op.strip()
                     op_channel = None
+                    op_catalog = None
+                    op_version = None
+                    op_min_version = None
+                    op_max_version = None
                 elif isinstance(op, dict):
                     op_name = op.get('name', '').strip() if 'name' in op and isinstance(op['name'], str) else ''
                     op_channel = op.get('channel', '').strip() if 'channel' in op and isinstance(op['channel'], str) else None
+                    op_catalog = op.get('catalog', '').strip() if 'catalog' in op and isinstance(op['catalog'], str) else None
+                    op_version = op.get('version', '').strip() if 'version' in op and isinstance(op['version'], str) else None
+                    op_min_version = op.get('minVersion', '').strip() if 'minVersion' in op and isinstance(op['minVersion'], str) else None
+                    op_max_version = op.get('maxVersion', '').strip() if 'maxVersion' in op and isinstance(op['maxVersion'], str) else None
                 else:
                     op_name = ''
                     op_channel = None
+                    op_catalog = None
+                    op_version = None
+                    op_min_version = None
+                    op_max_version = None
                 if op_name:
-                    operators.append(op_name)
+                    op_entry = {"name": op_name}
                     if op_channel:
+                        op_entry["channel"] = op_channel
                         channels[op_name] = op_channel
-            # Handle multiple catalogs (new format) or single catalog (backward compatibility)
-            catalogs = data.get('operator_catalogs', [])
-            if not catalogs and data.get('operator_catalog'):
-                catalogs = [data.get('operator_catalog')]
-            if not catalogs:
-                catalogs = ['registry.redhat.io/redhat/redhat-operator-index']
-            # Add operators for each catalog
-            for catalog in catalogs:
-                generator.add_operators(operators, catalog.strip(), channels)
+                    if op_version:
+                        op_entry["version"] = op_version
+                    if op_min_version:
+                        op_entry["minVersion"] = op_min_version
+                    if op_max_version:
+                        op_entry["maxVersion"] = op_max_version
+                    if op_catalog:
+                        catalog_to_operators.setdefault(op_catalog, []).append(op_entry)
+                    else:
+                        catalog_to_operators.setdefault('registry.redhat.io/redhat/redhat-operator-index', []).append(op_entry)
+            # Add operators for each catalog, passing full operator dicts
+            ocp_version = data.get('ocp_versions', [None])[0] or data.get('ocp_min_version') or data.get('ocp_max_version')
+            for catalog, ops in catalog_to_operators.items():
+                generator.add_operators(ops, catalog, channels, ocp_version=ocp_version)
         
         # Add additional images
         if data.get('additional_images'):
@@ -1322,9 +1343,22 @@ def generate_preview():
         if data.get('kubevirt_container', False):
             generator.set_kubevirt_container(True)
         
+        # Set archive size if provided
+        if data.get('archive_size'):
+            try:
+                generator.set_archive_size(int(data['archive_size']))
+            except Exception:
+                pass
+        # Add storageConfig if present
+        if data.get('storageConfig'):
+            storage_config = {'registry': {}}
+            if data['storageConfig'].get('registry'):
+                storage_config['registry']['imageURL'] = data['storageConfig']['registry']
+            if data['storageConfig'].get('skipTLS') is not None:
+                storage_config['registry']['skipTLS'] = data['storageConfig']['skipTLS']
+            generator.config['storageConfig'] = storage_config
         # Generate YAML
         yaml_content = generator.generate_yaml()
-        
         return jsonify({
             'success': True,
             'yaml': yaml_content,
@@ -1373,31 +1407,49 @@ def generate_download():
         
         # Add operators
         if data.get('operators'):
-            operators = []
+            # Group operators by catalog and version, preserving version and channel
+            catalog_to_operators = {}
             channels = {}
             for op in data['operators']:
                 if isinstance(op, str):
                     op_name = op.strip()
                     op_channel = None
+                    op_catalog = None
+                    op_version = None
+                    op_min_version = None
+                    op_max_version = None
                 elif isinstance(op, dict):
                     op_name = op.get('name', '').strip() if 'name' in op and isinstance(op['name'], str) else ''
                     op_channel = op.get('channel', '').strip() if 'channel' in op and isinstance(op['channel'], str) else None
+                    op_catalog = op.get('catalog', '').strip() if 'catalog' in op and isinstance(op['catalog'], str) else None
+                    op_version = op.get('version', '').strip() if 'version' in op and isinstance(op['version'], str) else None
+                    op_min_version = op.get('minVersion', '').strip() if 'minVersion' in op and isinstance(op['minVersion'], str) else None
+                    op_max_version = op.get('maxVersion', '').strip() if 'maxVersion' in op and isinstance(op['maxVersion'], str) else None
                 else:
                     op_name = ''
                     op_channel = None
+                    op_catalog = None
+                    op_version = None
+                    op_min_version = None
+                    op_max_version = None
                 if op_name:
-                    operators.append(op_name)
+                    op_entry = {"name": op_name}
                     if op_channel:
+                        op_entry["channel"] = op_channel
                         channels[op_name] = op_channel
-            # Handle multiple catalogs (new format) or single catalog (backward compatibility)
-            catalogs = data.get('operator_catalogs', [])
-            if not catalogs and data.get('operator_catalog'):
-                catalogs = [data.get('operator_catalog')]
-            if not catalogs:
-                catalogs = ['registry.redhat.io/redhat/redhat-operator-index']
-            # Add operators for each catalog
-            for catalog in catalogs:
-                generator.add_operators(operators, catalog.strip(), channels)
+                    if op_version:
+                        op_entry["version"] = op_version
+                    if op_min_version:
+                        op_entry["minVersion"] = op_min_version
+                    if op_max_version:
+                        op_entry["maxVersion"] = op_max_version
+                    if op_catalog:
+                        catalog_to_operators.setdefault(op_catalog, []).append(op_entry)
+                    else:
+                        catalog_to_operators.setdefault('registry.redhat.io/redhat/redhat-operator-index', []).append(op_entry)
+            ocp_version = data.get('ocp_versions', [None])[0] or data.get('ocp_min_version') or data.get('ocp_max_version')
+            for catalog, ops in catalog_to_operators.items():
+                generator.add_operators(ops, catalog, channels, ocp_version=ocp_version)
         
         # Add additional images
         if data.get('additional_images'):
@@ -1421,14 +1473,26 @@ def generate_download():
         if data.get('kubevirt_container', False):
             generator.set_kubevirt_container(True)
         
+        # Set archive size if provided
+        if data.get('archive_size'):
+            try:
+                generator.set_archive_size(int(data['archive_size']))
+            except Exception:
+                pass
+        # Add storageConfig if present
+        if data.get('storageConfig'):
+            storage_config = {'registry': {}}
+            if data['storageConfig'].get('registry'):
+                storage_config['registry']['imageURL'] = data['storageConfig']['registry']
+            if data['storageConfig'].get('skipTLS') is not None:
+                storage_config['registry']['skipTLS'] = data['storageConfig']['skipTLS']
+            generator.config['storageConfig'] = storage_config
         # Generate YAML
         yaml_content = generator.generate_yaml()
-        
         # Create temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
             temp_file.write(yaml_content)
             temp_filename = temp_file.name
-        
         # Return file content for download
         response = app.response_class(
             yaml_content,
@@ -1437,13 +1501,11 @@ def generate_download():
                 'Content-Disposition': f'attachment; filename=imageset-config.yaml'
             }
         )
-        
         # Clean up temp file
         try:
             os.unlink(temp_filename)
         except:
             pass
-        
         return response
         
     except Exception as e:
@@ -1522,6 +1584,34 @@ def validate_config():
         }), 500
 
 
+@app.route("/api/refresh/all", methods=["GET"])
+def refresh_all_static_data():
+    """
+    Refresh all static data files by calling oc-mirror for:
+    - OCP releases
+    - Operator catalogs for all known OCP versions
+    """
+
+    try:
+
+        refresh_versions()
+        refresh_ocp_channels()
+        refresh_ocp_releases()
+        refresh_ocp_operators()
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Error refreshing static data: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+    return jsonify({
+        "status": "success",
+        "message": "All static data refreshed",
+        "timestamp": datetime.now().isoformat()
+    })
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors by serving React app"""
@@ -1583,54 +1673,3 @@ def get_ocp_versions_static():
             "timestamp": datetime.now().isoformat()
         }), 500
 
-
-@app.route("/api/refresh/all", methods=["POST"])
-def refresh_all_static_data():
-    """
-    Refresh all static data files by calling oc-mirror for:
-    - OCP releases
-    - Operator catalogs for all known OCP versions
-    """
-    import json
-    import subprocess
-
-    results = {}
-
-    # 1. Refresh OCP releases
-    try:
-        releases_resp = refresh_versions()
-        results['ocp_releases'] = releases_resp.get_json() if hasattr(releases_resp, 'get_json') else releases_resp
-    except Exception as e:
-        results['ocp_releases'] = {'status': 'error', 'error': str(e)}
-
-    # 2. Refresh operator catalogs for all known OCP versions
-    try:
-        static_file_path = os.path.join("data", "ocp-versions.json")
-        versions = []
-        if os.path.exists(static_file_path):
-            with open(static_file_path, "r") as f:
-                data = json.load(f)
-                versions = data.get("releases", [])
-        else:
-            # fallback: try a few recent versions
-            versions = ["4.20", "4.19", "4.18", "4.17"]
-
-        catalog_results = {}
-        for version in versions:
-            try:
-                # Call the get_operator_catalogs logic directly
-                with app.test_request_context():
-                    resp = get_operator_catalogs(version)
-                    catalog_results[version] = resp.get_json() if hasattr(resp, 'get_json') else resp
-            except Exception as e:
-                catalog_results[version] = {'status': 'error', 'error': str(e)}
-        results['operator_catalogs'] = catalog_results
-    except Exception as e:
-        results['operator_catalogs'] = {'status': 'error', 'error': str(e)}
-
-    return jsonify({
-        "status": "success",
-        "message": "All static data refreshed",
-        "results": results,
-        "timestamp": datetime.now().isoformat()
-    })

@@ -21,6 +21,7 @@ import {
 } from '@patternfly/react-core';
 import { PlusIcon, TrashIcon } from '@patternfly/react-icons';
 
+
 function AdvancedConfig({ config, updateConfig }) {
   const [helmChartForm, setHelmChartForm] = useState({
     name: '',
@@ -37,6 +38,13 @@ function AdvancedConfig({ config, updateConfig }) {
     updateConfig({ additional_images: images });
   };
 
+  const handleArchiveSizeChange = (value) => {
+    // Only allow positive integers or empty string
+    if (value === '' || (/^\d+$/.test(value) && parseInt(value) > 0)) {
+      updateConfig({ archive_size: value === '' ? '' : parseInt(value) });
+    }
+  };
+
   const addHelmChart = () => {
     if (helmChartForm.name && helmChartForm.repository) {
       const newChart = {
@@ -44,10 +52,8 @@ function AdvancedConfig({ config, updateConfig }) {
         repository: helmChartForm.repository,
         version: helmChartForm.version || ''
       };
-      
       const currentCharts = config.helm_charts || [];
       updateConfig({ helm_charts: [...currentCharts, newChart] });
-      
       setHelmChartForm({ name: '', repository: '', version: '' });
       setShowHelmForm(false);
     }
@@ -68,6 +74,20 @@ function AdvancedConfig({ config, updateConfig }) {
           </CardTitle>
           <CardBody>
             <Form>
+              <FormGroup
+                label="Archive Size (optional, GiB)"
+                fieldId="archive-size"
+                helperText="Set the maximum archive size in GiB (Gibibytes) for oc-mirror. Leave blank to omit."
+              >
+                <TextInput
+                  id="archive-size"
+                  type="number"
+                  min={1}
+                  value={config.archive_size === undefined ? '' : config.archive_size}
+                  onChange={handleArchiveSizeChange}
+                  placeholder="4"
+                />
+              </FormGroup>
               <FormGroup>
                 <Checkbox
                   label="Enable KubeVirt Container Mirroring"
@@ -84,6 +104,47 @@ function AdvancedConfig({ config, updateConfig }) {
                   onChange={(checked) => updateConfig({ graph: checked })}
                   id="graph-checkbox"
                   description="Enables mirroring of graph data and related components by setting mirror.platform.graph: true"
+                />
+              </FormGroup>
+            </Form>
+          </CardBody>
+        </Card>
+      </GridItem>
+
+      {/* Storage Configuration Card moved from BasicConfig */}
+      <GridItem span={12}>
+        <Card>
+          <CardTitle>
+            <Title headingLevel="h2">Storage Configuration</Title>
+          </CardTitle>
+          <CardBody>
+            <Form isHorizontal>
+              <FormGroup label="Registry imageURL" fieldId="storage-registry">
+                <input
+                  type="text"
+                  id="storage-registry"
+                  value={typeof config.storageConfig?.registry === 'string' ? config.storageConfig.registry : ''}
+                  onChange={e => {
+                    let value = '';
+                    if (e && e.target && typeof e.target.value === 'string') {
+                      value = e.target.value;
+                    } else if (typeof e === 'string') {
+                      value = e;
+                    }
+                    // Defensive: never allow DOM nodes or events
+                    if (typeof value !== 'string') value = '';
+                    updateConfig({ storageConfig: { ...config.storageConfig, registry: value } });
+                  }}
+                  placeholder="quay.io/your-registry"
+                  style={{ width: '100%', padding: '6px', fontSize: '1rem' }}
+                />
+              </FormGroup>
+              <FormGroup label="Skip TLS" fieldId="storage-skip-tls">
+                <Checkbox
+                  id="storage-skip-tls"
+                  label="Skip TLS verification for registry"
+                  isChecked={!!config.storageConfig?.skipTLS}
+                  onChange={(event, checked) => updateConfig({ storageConfig: { ...config.storageConfig, skipTLS: checked } })}
                 />
               </FormGroup>
             </Form>

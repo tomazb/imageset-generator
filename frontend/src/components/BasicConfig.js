@@ -39,13 +39,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
           catalogs = Object.values(data.catalogs).flat();
         }
         setAvailableCatalogs(catalogs);
-        // Auto-select the default catalog if no catalogs are currently selected
-        if ((!config.operator_catalogs || config.operator_catalogs.length === 0) && Array.isArray(catalogs)) {
-          const defaultCatalogs = catalogs.filter(cat => cat.default).map(cat => cat.url);
-          if (defaultCatalogs.length > 0) {
-            updateConfig({ operator_catalogs: defaultCatalogs });
-          }
-        }
+  // Do not auto-select default catalogs; allow user to fully deselect all catalogs
       } else {
         console.error('Failed to fetch catalogs:', data.message);
         setAvailableCatalogs([]);
@@ -67,7 +61,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
 
   // Handle catalog selection changes
   const handleCatalogSelectionChange = (selection, isSelected) => {
-    const currentCatalogs = (config.operator_catalogs || []).filter(isValidCatalogUrl);
+    const currentCatalogs = Array.isArray(config.operator_catalogs) ? config.operator_catalogs.filter(isValidCatalogUrl) : [];
     let newCatalogs;
     if (isSelected) {
       if (isValidCatalogUrl(selection)) {
@@ -79,7 +73,15 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
     } else {
       newCatalogs = currentCatalogs.filter(catalog => catalog !== selection);
     }
-    updateConfig({ operator_catalogs: newCatalogs });
+    // Always update config, even if newCatalogs is empty (allow full deselect)
+    if (!Array.isArray(newCatalogs)) newCatalogs = [];
+    console.log('Catalog selection changed, sending:', newCatalogs);
+    // If all catalogs are deselected, also clear selected operators to reset OperatorSearch
+    if (newCatalogs.length === 0) {
+      updateConfig({ operator_catalogs: [], operators: [] });
+    } else {
+      updateConfig({ operator_catalogs: [...newCatalogs] });
+    }
   };
 
   const handleOcpVersionsChange = (e) => {
@@ -358,7 +360,7 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                 helperText={
                   <HelperText>
                     <HelperTextItem>
-                      Select multiple operator catalogs based on your OCP version. Default catalog is automatically selected.
+                      Select one or more operator catalogs based on your OCP version. You may deselect all catalogs if desired.
                     </HelperTextItem>
                   </HelperText>
                 }
@@ -443,8 +445,11 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
           </CardBody>
         </Card>
       </GridItem>
+
+
       <GridItem span={12}>
         <OperatorSearch 
+          key={(config.operator_catalogs || []).join(',') + (config.ocp_versions?.[0] || '')}
           selectedOperators={config.operators || []}
           onOperatorsChange={handleModernOperatorsChange}
           selectedCatalogs={config.operator_catalogs || []}

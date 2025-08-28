@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Slider, Tooltip } from '@patternfly/react-core';
 import {
   Card,
   CardTitle,
@@ -33,7 +34,23 @@ function OperatorSearch({
   const [error, setError] = useState('');
   const [isChannelSelectOpen, setIsChannelSelectOpen] = useState({});
   const [operatorChannels, setOperatorChannels] = useState({});
-  const [operatorLimit, setOperatorLimit] = useState(25);
+  const [operatorLimit] = useState(25);
+  const [page, setPage] = useState(0);
+  // For each operator, store [minIndex, maxIndex] for the version range slider
+  const [selectedVersionRangeByName, setSelectedVersionRangeByName] = useState({});
+
+  // Reset local state when catalogs or version change (via key prop)
+  useEffect(() => {
+    setSearchTerm('');
+    setAvailableOperators([]);
+    setFilteredOperators([]);
+    setIsLoading(false);
+    setError('');
+    setIsChannelSelectOpen({});
+    setOperatorChannels({});
+    setSelectedVersionRangeByName({});
+    setPage(0);
+  }, [selectedCatalogs, selectedVersion]);
 
   // Define fetchOperators function FIRST before any useEffect that uses it
   const fetchOperators = useCallback(async () => {
@@ -45,18 +62,31 @@ function OperatorSearch({
     setError('');
 
     try {
-      const primaryCatalog = selectedCatalogs[0];
-      const response = await fetch(
-        `/api/operators/list?catalog=${encodeURIComponent(primaryCatalog)}&version=${encodeURIComponent(selectedVersion)}`
+      // Fetch from all selected catalogs in parallel
+      const fetches = selectedCatalogs.map(catalog =>
+        fetch(`/api/operators/list?catalog=${encodeURIComponent(catalog)}&version=${encodeURIComponent(selectedVersion)}`)
+          .then(res => res.json().catch(() => ({ status: 'error', message: 'Invalid JSON' })))
+          .then(data => ({ catalog, data }))
       );
-      
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        setAvailableOperators(data.operators || []);
-      } else {
-        setError(data.message || 'Failed to fetch operators');
-        setAvailableOperators([]);
+      const results = await Promise.all(fetches);
+      // Merge and deduplicate operators by unique name+version+channel
+      const allOperators = [];
+      const seen = new Set();
+      results.forEach(({ catalog, data }) => {
+        if (data.status === 'success' && Array.isArray(data.operators)) {
+          data.operators.forEach(op => {
+            const key = `${op.name}|${op.version}|${op.channel}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              allOperators.push({ ...op, catalog });
+            }
+          });
+        }
+      });
+      setAvailableOperators(allOperators);
+      // If all failed, show error
+      if (allOperators.length === 0 && results.some(r => r.data.status !== 'success')) {
+        setError(results.map(r => r.data.message).filter(Boolean).join('; ') || 'Failed to fetch operators');
       }
     } catch (err) {
       console.error('Error fetching operators:', err);
@@ -73,25 +103,77 @@ function OperatorSearch({
     }
   }, [selectedCatalogs, selectedVersion, fetchOperators]);
 
+  // Aggregate operators by base name (before first dot), collect all versions for each base name
   useEffect(() => {
     let filtered = availableOperators;
     if (searchTerm.trim() !== '') {
-      filtered = availableOperators.filter(op => 
-        op.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (op.display_name && op.display_name.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+      const lowerSearch = searchTerm.toLowerCase();
+      filtered = availableOperators.filter(op => {
+        // Name or display name match
+        if (op.name && op.name.toLowerCase().includes(lowerSearch)) return true;
+        if (op.display_name && op.display_name.toLowerCase().includes(lowerSearch)) return true;
+        // Keyword match (array of strings)
+        if (Array.isArray(op.keywords)) {
+          for (const kw of op.keywords) {
+            if (typeof kw === 'string' && kw.toLowerCase().includes(lowerSearch)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
     }
-    setFilteredOperators(filtered);
+    // Aggregate by base name (before first dot)
+    const agg = {};
+    filtered.forEach(op => {
+      // Extract base name (before first dot)
+      const baseName = op.name.split('.')[0];
+      const version = op.version || (op.name.split('.').slice(1).join('.') || op.name);
+      if (!agg[baseName]) {
+        agg[baseName] = {
+          ...op,
+          name: baseName,
+          versions: version ? [version] : [],
+          versionCatalogMap: version ? { [version]: op.catalog } : {},
+          allOps: [op]
+        };
+      } else {
+        if (version && !agg[baseName].versions.includes(version)) {
+          agg[baseName].versions.push(version);
+        }
+        if (version) {
+          agg[baseName].versionCatalogMap[version] = op.catalog;
+        }
+        agg[baseName].allOps.push(op);
+      }
+    });
+    // Sort versions descending (newest first, by string)
+    Object.values(agg).forEach(entry => {
+      entry.versions = entry.versions.filter(Boolean).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    });
+    setFilteredOperators(Object.values(agg));
+    setPage(0); // Reset to first page on filter change
   }, [searchTerm, availableOperators]);
 
-  const addOperator = (operator) => {
+
+  const addOperator = (operator, minVersion, maxVersion) => {
+    // Find the catalog for the selected minVersion (for display)
+    let catalog = undefined;
+    if (operator.versionCatalogMap && minVersion) {
+      catalog = operator.versionCatalogMap[minVersion];
+    } else if (operator.catalog) {
+      catalog = operator.catalog;
+    }
+    // Always include minVersion/maxVersion for all operators
+    const versions = operator.versions || [];
     const newOperator = {
       name: operator.name,
       display_name: operator.display_name,
-      channel: 'stable',
-      version: operator.version || 'latest'
+      channel: operator.channel || 'stable',
+      catalog: catalog,
+      minVersion: minVersion,
+      maxVersion: maxVersion
     };
-
     const updatedOperators = [...(selectedOperators || []), newOperator];
     onOperatorsChange(updatedOperators);
   };
@@ -101,8 +183,8 @@ function OperatorSearch({
     onOperatorsChange(updatedOperators);
   };
 
-  const isOperatorSelected = (operatorName) => {
-    return (selectedOperators || []).some(op => op.name === operatorName);
+  const isOperatorSelected = (operatorName, minVersion, maxVersion) => {
+    return (selectedOperators || []).some(op => op.name === operatorName && String(op.minVersion) === String(minVersion) && String(op.maxVersion) === String(maxVersion));
   };
 
   if (!selectedCatalogs || selectedCatalogs.length === 0) {
@@ -173,63 +255,126 @@ function OperatorSearch({
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                 <Title headingLevel="h4" size="md" style={{ marginBottom: 0, marginRight: '16px' }}>
-                  Available Operators ({filteredOperators.length > operatorLimit ? operatorLimit : filteredOperators.length}{filteredOperators.length > operatorLimit ? ` of ${filteredOperators.length}` : ''})
+                  Available Operators (Page {page + 1} of {Math.ceil(filteredOperators.length / operatorLimit)})
                 </Title>
                 <span style={{ marginLeft: 'auto', fontSize: '0.95em' }}>
-                  Show
-                  <TextInput
-                    type="number"
-                    min={1}
-                    max={filteredOperators.length}
-                    value={operatorLimit}
-                    onChange={(e, value) => {
-                      let v = parseInt(value, 10);
-                      if (isNaN(v) || v < 1) v = 1;
-                      if (v > filteredOperators.length) v = filteredOperators.length;
-                      setOperatorLimit(v);
-                    }}
-                    style={{ width: '60px', display: 'inline-block', margin: '0 8px' }}
-                    aria-label="Operator result limit"
-                  />
-                  operators
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    isDisabled={page === 0}
+                    style={{ marginRight: 8 }}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(Math.ceil(filteredOperators.length / operatorLimit) - 1, p + 1))}
+                    isDisabled={page >= Math.ceil(filteredOperators.length / operatorLimit) - 1}
+                  >
+                    Next
+                  </Button>
                 </span>
               </div>
               <Grid hasGutter>
-                {filteredOperators.slice(0, operatorLimit).map((operator) => (
-                  <GridItem span={12} md={6} lg={4} key={operator.name}>
-                    <Card>
-                      <CardBody>
-                        <Title headingLevel="h5" size="sm">
-                          {operator.display_name || operator.name}
-                        </Title>
-                        <Text component="small" style={{ color: '#6a6e73' }}>
-                          {operator.name}
-                        </Text>
-                        {operator.description && (
-                          <Text component="p" style={{ marginTop: '8px', fontSize: '14px' }}>
-                            {operator.description.length > 100 
-                              ? `${operator.description.substring(0, 100)}...`
-                              : operator.description
-                            }
-                          </Text>
-                        )}
-                        <div style={{ marginTop: '16px' }}>
-                          {!isOperatorSelected(operator.name) ? (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => addOperator(operator)}
-                            >
-                              Add Operator
-                            </Button>
-                          ) : (
-                            <Badge>✓ Selected</Badge>
+                {filteredOperators.slice(page * operatorLimit, (page + 1) * operatorLimit).map((operator) => {
+                  const versions = operator.versions || [];
+                  // Default minVersion to 0 (latest in reversed slider), maxVersion to 0 (oldest in reversed slider) if not set
+                  let range = selectedVersionRangeByName[operator.name];
+                  if (!range) {
+                    range = [versions.length - 1, 0];
+                  }
+                  const minVersion = versions[range[0]];
+                  const maxVersion = versions[range[1]];
+                  // Only show catalog for minVersion
+                  const catalogForVersion = operator.versionCatalogMap && minVersion ? operator.versionCatalogMap[minVersion] : undefined;
+                  return (
+                    <GridItem span={12} md={6} lg={4} key={operator.name}>
+                      <Card>
+                        <CardBody>
+                          <Title headingLevel="h5" size="sm">
+                            {operator.display_name || operator.name}
+                          </Title>
+                          {catalogForVersion ? (
+                            <Text component="small" style={{ color: '#0088cc', fontWeight: 500 }}>
+                              Catalog: {catalogForVersion}
+                            </Text>
+                          ) : null}
+                          {operator.description && (
+                            <Text component="p" style={{ marginTop: '8px', fontSize: '14px' }}>
+                              {operator.description.length > 100 
+                                ? `${operator.description.substring(0, 100)}...`
+                                : operator.description
+                              }
+                            </Text>
                           )}
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </GridItem>
-                ))}
+                          {versions.length > 1 && (
+                            <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+                              <span style={{ fontWeight: 500 }}>Version Range:&nbsp;</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <Tooltip content={`Minimum version: ${minVersion}`} position="top">
+                                  <div style={{ width: 120 }}>
+                                    <Slider
+                                      min={0}
+                                      max={versions.length - 1}
+                                      value={versions.length - 1 - range[0]}
+                                      onChange={(_e, v) => {
+                                        setSelectedVersionRangeByName(prev => ({ ...prev, [operator.name]: [versions.length - 1 - v, range[1]] }));
+                                      }}
+                                      showTicks
+                                      step={1}
+                                      aria-label={`Select minimum version for ${operator.name}`}
+                                      marks={versions.slice().reverse().map((ver, idx) => ({ value: idx, label: ver }))}
+                                    />
+                                  </div>
+                                </Tooltip>
+                                <span style={{ fontWeight: 500, fontSize: 18 }}>–</span>
+                                <Tooltip content={`Maximum version: ${maxVersion}`} position="top">
+                                  <div style={{ width: 120 }}>
+                                    <Slider
+                                      min={0}
+                                      max={versions.length - 1}
+                                      value={versions.length - 1 - range[1]}
+                                      onChange={(_e, v) => {
+                                        // Reverse the index for the max slider
+                                        setSelectedVersionRangeByName(prev => ({ ...prev, [operator.name]: [range[0], versions.length - 1 - v] }));
+                                      }}
+                                      showTicks
+                                      step={1}
+                                      aria-label={`Select maximum version for ${operator.name}`}
+                                      marks={versions.slice().reverse().map((ver, idx) => ({ value: idx, label: ver }))}
+                                    />
+                                  </div>
+                                </Tooltip>
+                              </div>
+                              <span style={{ marginLeft: 8 }}>{minVersion} - {maxVersion}</span>
+                            </div>
+                          )}
+                          {versions.length === 1 && (
+                            <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+                              <span style={{ fontWeight: 500 }}>Version:&nbsp;</span>
+                              <span>{versions[0]}</span>
+                            </div>
+                          )}
+                          <div style={{ marginTop: '16px' }}>
+                            {!isOperatorSelected(operator.name, minVersion, maxVersion) ? (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => addOperator(operator, minVersion, maxVersion)}
+                              >
+                                Add Operator
+                              </Button>
+                            ) : (
+                              <Badge>✓ Selected</Badge>
+                            )}
+                          </div>
+                        </CardBody>
+                      </Card>
+                    </GridItem>
+                  );
+                })}
               </Grid>
             </div>
           )}

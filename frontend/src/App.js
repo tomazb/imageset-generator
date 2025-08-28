@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
@@ -22,6 +24,35 @@ import AdvancedConfig from './components/AdvancedConfig';
 import PreviewGenerate from './components/PreviewGenerate';
 import StatusBar from './components/StatusBar';
 
+// Utility to deeply sanitize config for JSON serialization
+function deepSanitizeConfig(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(deepSanitizeConfig);
+  } else if (obj && typeof obj === 'object' && obj.constructor === Object) {
+    const out = {};
+    for (const key in obj) {
+      const v = obj[key];
+      if (
+        typeof v === 'string' ||
+        typeof v === 'boolean' ||
+        typeof v === 'number' ||
+        v === null ||
+        v === undefined
+      ) {
+        out[key] = v;
+      } else if (Array.isArray(v) || (v && typeof v === 'object' && v.constructor === Object)) {
+        out[key] = deepSanitizeConfig(v);
+      } else {
+        // skip DOM nodes, functions, etc.
+        console.warn('Sanitizing out non-serializable config value:', key, v);
+      }
+    }
+    return out;
+  } else {
+    return obj;
+  }
+}
+
 const API_BASE = '';
 
 function App() {
@@ -38,7 +69,8 @@ function App() {
     additional_images: [],
     helm_charts: [],
     output_file: 'imageset-config.yaml',
-    kubevirt_container: false
+    kubevirt_container: false,
+    storageConfig: { registry: '', skipTLS: false }
   });
   const [yamlPreview, setYamlPreview] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -56,7 +88,39 @@ function App() {
   const [refreshStatus, setRefreshStatus] = useState('');
 
   const updateConfig = (updates) => {
-    setConfig(prev => ({ ...prev, ...updates }));
+    // Always create a new array reference for operator_catalogs if present
+    if (updates.operator_catalogs) {
+      updates.operator_catalogs = [...updates.operator_catalogs];
+    }
+    // Deep merge for storageConfig to avoid [object Object] bug
+    let newConfig;
+    if (updates.storageConfig) {
+      // Remove any non-serializable fields from storageConfig
+      const safeStorageConfig = {};
+      for (const key in updates.storageConfig) {
+        const v = updates.storageConfig[key];
+        if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number' || v === null || v === undefined) {
+          safeStorageConfig[key] = v;
+        } else {
+          // Defensive: skip objects, functions, DOM nodes, etc.
+          console.warn('Skipped non-serializable storageConfig value:', key, v);
+        }
+      }
+      newConfig = {
+        ...config,
+        ...updates,
+        storageConfig: {
+          ...config.storageConfig,
+          ...safeStorageConfig
+        }
+      };
+    } else {
+      newConfig = { ...config, ...updates };
+    }
+    console.log('Config updated:', newConfig);
+  setConfig(newConfig);
+  // Force re-render for debugging
+  setTimeout(() => setConfig(c => ({ ...c })), 10);
   };
 
   const fetchReleasesForChannelAndVersion = async (channel) => {
@@ -103,9 +167,10 @@ function App() {
     setIsGenerating(true);
     setStatus('Generating preview...');
     setAlertMessage('');
-    
+    // Deep sanitize config before JSON.stringify
+    const safeConfig = deepSanitizeConfig(config);
     try {
-      const response = await axios.post(`${API_BASE}/api/generate/preview`, config);
+      const response = await axios.post(`${API_BASE}/api/generate/preview`, safeConfig);
       setYamlPreview(response.data.yaml);
       setStatus('Preview generated successfully');
       setAlertMessage('YAML preview generated successfully');
@@ -126,7 +191,9 @@ function App() {
     try {
       setStatus('Generating configuration file...');
       setAlertMessage('');
-      const response = await axios.post(`${API_BASE}/api/generate/download`, config, {
+      // Deep sanitize config before JSON.stringify
+      const safeConfig = deepSanitizeConfig(config);
+      const response = await axios.post(`${API_BASE}/api/generate/download`, safeConfig, {
         responseType: 'blob'
       });
       
@@ -214,7 +281,7 @@ function App() {
         </PageSection>
       )}
 
-      <PageSection>
+      {/* <PageSection>
         <Button
           variant="secondary"
           icon={<SyncAltIcon />}
@@ -226,7 +293,7 @@ function App() {
           Refresh All Data
         </Button>
         {refreshStatus && <div style={{ marginBottom: '1rem' }}>{refreshStatus}</div>}
-      </PageSection>
+      </PageSection> */}
 
       <PageSection>
         <Tabs

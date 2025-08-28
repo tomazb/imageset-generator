@@ -11,12 +11,14 @@ Usage:
     python generator.py --config config.json
 """
 
+
 import argparse
 import yaml
 from typing import List, Dict, Any
 from datetime import datetime
 import sys
 import os
+import re
 
 
 class ImageSetGenerator:
@@ -34,7 +36,7 @@ class ImageSetGenerator:
                 }
             },
             "spec": {
-                "archiveSize": 4,
+                # 'archiveSize' will only be set if explicitly requested
                 "mirror": {
                     "platform": {
                         "channels": [],
@@ -46,6 +48,12 @@ class ImageSetGenerator:
                 }
             }
         }
+
+    def set_archive_size(self, size: int):
+        """
+        Set the archiveSize in the configuration (optional)
+        """
+        self.config["spec"]["archiveSize"] = size
     
     def add_ocp_versions(self, versions: List[str] = None, channel: str = "stable-4.14", min_version: str = None, max_version: str = None):
         """
@@ -87,18 +95,16 @@ class ImageSetGenerator:
         
         self.config["spec"]["mirror"]["platform"]["channels"].append(platform_config)
     
-    def add_operators(self, operators: List[str], catalog: str = "registry.redhat.io/redhat/redhat-operator-index", channels: Dict[str, str] = None):
+    def add_operators(self, operators: List[Any], catalog: str = "registry.redhat.io/redhat/redhat-operator-index", channels: Dict[str, str] = None, ocp_version: str = None):
         """
         Add operators to the configuration
-        
         Args:
-            operators: List of operator names or package suggestions
+            operators: List of operator dicts (with name, version, channel, etc.)
             catalog: Operator catalog source (default: Red Hat operator index)
             channels: Optional dictionary mapping operator names to their channels
         """
         if not operators:
             return
-        
         # Common operator mappings
         operator_mappings = {
             "logging": "cluster-logging",
@@ -120,31 +126,39 @@ class ImageSetGenerator:
             "jaeger": "jaeger-product",
             "kiali": "kiali-ossm"
         }
-        
+        # Ensure catalog includes OCP version as :v<version> if provided and not already present
+        if ocp_version:
+            # Remove any existing :vX.YY
+            catalog = re.sub(r":v[\d.]+$", "", catalog)
+            catalog = f"{catalog}:v{ocp_version}"
         operator_packages = []
         for op in operators:
-            # Use mapping if available, otherwise use the operator name as-is
-            package_name = operator_mappings.get(op.lower(), op)
-            
-            operator_entry = {
-                "name": package_name
-            }
-            
-            # Add channel information if provided
-            if channels and (op in channels or package_name in channels):
-                channel = channels.get(op) or channels.get(package_name)
+            # Accept both string and dict for backward compatibility
+            if isinstance(op, str):
+                package_name = operator_mappings.get(op.lower(), op)
+                operator_entry = {"name": package_name}
+                if channels and (op in channels or package_name in channels):
+                    channel = channels.get(op) or channels.get(package_name)
+                    if channel:
+                        operator_entry["channels"] = [{"name": channel}]
+                operator_packages.append(operator_entry)
+            elif isinstance(op, dict):
+                package_name = operator_mappings.get(op.get("name", "").lower(), op.get("name", ""))
+                operator_entry = {"name": package_name}
+                # Always add minVersion/maxVersion if present in op
+                if op.get("minVersion"):
+                    operator_entry["minVersion"] = op["minVersion"]
+                if op.get("maxVersion"):
+                    operator_entry["maxVersion"] = op["maxVersion"]
+                # Add channel if present
+                channel = op.get("channel") or (channels.get(op.get("name")) if channels else None)
                 if channel:
-                    operator_entry["channel"] = {
-                        "name": channel
-                    }
-            
-            operator_packages.append(operator_entry)
-        
+                    operator_entry["channels"] = [{"name": channel}]
+                operator_packages.append(operator_entry)
         operator_config = {
             "catalog": catalog,
             "packages": operator_packages
         }
-        
         self.config["spec"]["mirror"]["operators"].append(operator_config)
     
     def add_additional_images(self, images: List[str]):
@@ -197,8 +211,26 @@ class ImageSetGenerator:
                 del self.config["spec"]["mirror"]["platform"]["kubeVirtContainer"]
     
     def generate_yaml(self) -> str:
-        """Generate the YAML configuration string"""
-        return yaml.dump(self.config, default_flow_style=False, sort_keys=False)
+        """Generate the YAML configuration string with no 'spec' or 'metadata' section; metadata as YAML comments."""
+        config_copy = dict(self.config)
+        spec = config_copy.pop('spec', {})
+        metadata = config_copy.pop('metadata', {})
+        # Move all keys from spec to the root
+        config_copy.update(spec)
+        # Prepare YAML comments for metadata
+        comment_lines = []
+        if metadata:
+            for k, v in metadata.items():
+                if isinstance(v, dict):
+                    for subk, subv in v.items():
+                        comment_lines.append(f"# {k}.{subk}: {subv}")
+                else:
+                    comment_lines.append(f"# {k}: {v}")
+        # Add storageConfig if present
+        if 'storageConfig' in config_copy and config_copy['storageConfig'] is None:
+            del config_copy['storageConfig']
+        yaml_body = yaml.dump(config_copy, default_flow_style=False, sort_keys=False)
+        return ("\n".join(comment_lines) + "\n" + yaml_body) if comment_lines else yaml_body
     
     def save_to_file(self, filename: str):
         """Save the configuration to a YAML file"""
