@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import yaml
+import json
 from typing import List, Dict, Any
 from datetime import datetime
 import sys
@@ -55,7 +56,7 @@ class ImageSetGenerator:
         """
         self.config["spec"]["archiveSize"] = size
     
-    def add_ocp_versions(self, versions: List[str] = None, channel: str = "stable-4.14", min_version: str = None, max_version: str = None):
+    def add_ocp_versions(self, versions: List[str] = None, channel: List[str] = "stable-4.14", min_version: str = None, max_version: str = None):
         """
         Add OpenShift platform versions to the configuration
         
@@ -95,13 +96,21 @@ class ImageSetGenerator:
         
         self.config["spec"]["mirror"]["platform"]["channels"].append(platform_config)
     
-    def add_operators(self, operators: List[Any], catalog: str = "registry.redhat.io/redhat/redhat-operator-index", channels: Dict[str, str] = None, ocp_version: str = None):
+    def add_operators(self, operators: List[Any], catalog: str = "registry.redhat.io/redhat/redhat-operator-index", channels: Dict[str, str] = None, ocp_version: str = None,newest_channel: Dict[str, str] = None):
         """
         Add operators to the configuration
         Args:
             operators: List of operator dicts (with name, version, channel, etc.)
+                      Each operator dict can contain:
+                      - name: Name of the operator
+                      - minVersion: Minimum version to include (optional)
+                      - maxVersion: Maximum version to include (optional)
+                      - selectedVersions: List of specific versions to include (optional)
+                      - channel: Specific channel to use (optional)
+                      - fileName: Path to the operator index file (optional)
             catalog: Operator catalog source (default: Red Hat operator index)
             channels: Optional dictionary mapping operator names to their channels
+            ocp_version: Optional OCP version to use for catalog tag
         """
         if not operators:
             return
@@ -145,15 +154,39 @@ class ImageSetGenerator:
             elif isinstance(op, dict):
                 package_name = operator_mappings.get(op.get("name", "").lower(), op.get("name", ""))
                 operator_entry = {"name": package_name}
-                # Always add minVersion/maxVersion if present in op
-                if op.get("minVersion"):
-                    operator_entry["minVersion"] = op["minVersion"]
-                if op.get("maxVersion"):
-                    operator_entry["maxVersion"] = op["maxVersion"]
+
+                # Handle selected versions if present
+                selected_versions = op.get("selectedVersions", [])
+                if selected_versions:
+                    # If specific versions are selected, use them to determine min/max
+                    if len(selected_versions) > 0:
+                        operator_entry["minVersion"] = min(selected_versions)
+                        operator_entry["maxVersion"] = max(selected_versions)
+                else:
+                    # Fall back to minVersion/maxVersion if no specific versions selected
+                    if op.get("minVersion"):
+                        operator_entry["minVersion"] = op["minVersion"]
+                    if op.get("maxVersion"):
+                        operator_entry["maxVersion"] = op["maxVersion"]
+
                 # Add channel if present
-                channel = op.get("channel") or (channels.get(op.get("name")) if channels else None)
-                if channel:
-                    operator_entry["channels"] = [{"name": channel}]
+                channel = (channels.get(op.get("name")) if channels else None)
+                channel= list(channel)
+
+                if len(channel) > 0:
+                    operator_entry["channels"] = []
+                    for ch in channel:
+                        operator_entry["channels"].append({"name": ch})
+
+                    if newest_channel and package_name in newest_channel:
+                        operator_entry["defaultChannel"] = newest_channel[package_name]
+                    else:
+                        operator_entry["defaultChannel"] = channel[-1]
+
+                if channel is None:
+                    channel = op.get("channel")
+                    
+
                 operator_packages.append(operator_entry)
         operator_config = {
             "catalog": catalog,

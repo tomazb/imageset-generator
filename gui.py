@@ -311,10 +311,22 @@ class ImageSetGeneratorGUI:
             channel = self.ocp_channel_var.get()
             generator.add_ocp_versions(versions, channel)
         
-        # Add operators
+        # Add operators with version selection support
         operators = self.operators_var.get().strip()
         if operators:
-            operator_list = [op.strip() for op in operators.split(",") if op.strip()]
+            operator_list = []
+            for op in operators.split(","):
+                op = op.strip()
+                if op:
+                    # If operator has selected versions, create a dict with the info
+                    if hasattr(self, 'operator_versions') and op in self.operator_versions:
+                        operator_list.append({
+                            "name": op,
+                            "selectedVersions": self.operator_versions[op]
+                        })
+                    else:
+                        operator_list.append(op)
+            
             catalog = self.operator_catalog_var.get()
             generator.add_operators(operator_list, catalog)
         

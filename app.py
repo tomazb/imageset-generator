@@ -9,6 +9,7 @@ It serves as the backend for the React frontend application.
 import json
 import re
 from flask import Flask, request, jsonify, send_from_directory
+from packaging.version import Version as Version_Checker
 from flask_cors import CORS
 import yaml
 import os
@@ -17,6 +18,55 @@ import tempfile
 from datetime import datetime
 from generator import ImageSetGenerator
 import traceback
+
+def process_operator_data(operator):
+    """Process operator data to handle selected versions and other parameters"""
+    if isinstance(operator, str):
+        return {
+            "name": operator.strip(),
+            "catalog": None,
+            "channel": None,
+            "version": None,
+            "minVersion": None,
+            "maxVersion": None,
+            "selectedVersions": None
+        }
+    elif isinstance(operator, dict):
+        return {
+            "name": operator.get('name', '').strip() if isinstance(operator.get('name'), str) else '',
+            "catalog": operator.get('catalog', '').strip() if isinstance(operator.get('catalog'), str) else None,
+            "channel": operator.get('channel', '').strip() if isinstance(operator.get('channel'), str) else None,
+            "version": operator.get('version', '').strip() if isinstance(operator.get('version'), str) else None,
+            "minVersion": operator.get('minVersion', '').strip() if isinstance(operator.get('minVersion'), str) else None,
+            "maxVersion": operator.get('maxVersion', '').strip() if isinstance(operator.get('maxVersion'), str) else None,
+            "selectedVersions": operator.get('selectedVersions', []) if isinstance(operator.get('selectedVersions'), list) else None,
+            "fileName": operator.get('fileName') if operator.get('fileName') else None
+        }
+    else:
+        return None
+
+def prepare_operator_entry(op_data):
+    """Prepare operator entry for the generator from processed data"""
+    if not op_data or not op_data["name"]:
+        return None
+        
+    entry = {"name": op_data["name"]}
+    
+    if op_data["channel"]:
+        entry["channel"] = op_data["channel"]
+    
+    if op_data["selectedVersions"]:
+        entry["selectedVersions"] = op_data["selectedVersions"]
+    else:
+        if op_data["minVersion"]:
+            entry["minVersion"] = op_data["minVersion"]
+        if op_data["maxVersion"]:
+            entry["maxVersion"] = op_data["maxVersion"]
+    
+    if op_data["fileName"]:
+        entry["fileName"] = op_data["fileName"]
+        
+    return entry
 
 app = Flask(__name__, static_folder='frontend/build')
 CORS(app)  # Enable CORS for all routes
@@ -1254,7 +1304,8 @@ def generate_preview():
         
         # Create generator instance
         generator = ImageSetGenerator()
-        
+        newest_channel = {}
+
         # Add OCP versions
         if data.get('ocp_versions') or data.get('ocp_min_version') or data.get('ocp_max_version'):
             # New approach with min/max versions
@@ -1266,7 +1317,7 @@ def generate_preview():
             legacy_versions = None
             if data.get('ocp_versions'):
                 legacy_versions = [v.strip() for v in data['ocp_versions'] if v.strip()]
-            
+
             generator.add_ocp_versions(
                 versions=legacy_versions,
                 channel=channel,
@@ -1276,51 +1327,90 @@ def generate_preview():
         
         # Add operators
         if data.get('operators'):
-            # Group operators by catalog and version, preserving version and channel
+            # Group operators by catalog and version
             catalog_to_operators = {}
             channels = {}
+            
             for op in data['operators']:
-                if isinstance(op, str):
-                    op_name = op.strip()
-                    op_channel = None
-                    op_catalog = None
-                    op_version = None
-                    op_min_version = None
-                    op_max_version = None
-                elif isinstance(op, dict):
-                    op_name = op.get('name', '').strip() if 'name' in op and isinstance(op['name'], str) else ''
-                    op_channel = op.get('channel', '').strip() if 'channel' in op and isinstance(op['channel'], str) else None
-                    op_catalog = op.get('catalog', '').strip() if 'catalog' in op and isinstance(op['catalog'], str) else None
-                    op_version = op.get('version', '').strip() if 'version' in op and isinstance(op['version'], str) else None
-                    op_min_version = op.get('minVersion', '').strip() if 'minVersion' in op and isinstance(op['minVersion'], str) else None
-                    op_max_version = op.get('maxVersion', '').strip() if 'maxVersion' in op and isinstance(op['maxVersion'], str) else None
-                else:
-                    op_name = ''
-                    op_channel = None
-                    op_catalog = None
-                    op_version = None
-                    op_min_version = None
-                    op_max_version = None
-                if op_name:
-                    op_entry = {"name": op_name}
-                    if op_channel:
-                        op_entry["channel"] = op_channel
-                        channels[op_name] = op_channel
-                    if op_version:
-                        op_entry["version"] = op_version
-                    if op_min_version:
-                        op_entry["minVersion"] = op_min_version
-                    if op_max_version:
-                        op_entry["maxVersion"] = op_max_version
-                    if op_catalog:
-                        catalog_to_operators.setdefault(op_catalog, []).append(op_entry)
-                    else:
-                        catalog_to_operators.setdefault('registry.redhat.io/redhat/redhat-operator-index', []).append(op_entry)
+                # Process operator data using helper function
+                op_data = process_operator_data(op)
+                if not op_data:
+                    continue
+                    
+                # Prepare operator entry
+                op_entry = prepare_operator_entry(op_data)
+                if not op_entry:
+                    continue
+                    
+                # Store channel mapping if present
+                available_versions = set([])
+                possible_versions = []
+                name = op_data.get('name')
+                version_key = data.get('ocp_versions', [None])[0]
+                catalog_name = op_data.get('catalog', "")
+                catalog_index = (catalog_name.split('/')[-1]).split(':')[0]
+                static_file_path = os.path.join("data", f"operators-{catalog_index}-{version_key}.json")
+                temp_channel_version_map = {}
+                
+                #Open static_file_path and get all available versions of operator between the selected min and max values
+                with open(static_file_path, 'r') as f:
+                    operator_catalog_data = json.load(f)
+                    for operator in operator_catalog_data.get('operators', []):
+                        if operator.get('name') == name:
+                            possible_versions.append(operator.get('version', []))
+                            temp_channel_version_map[operator.get('version')] = operator.get('channel')
+
+                min_version = op_data.get('minVersion')
+                max_version = op_data.get('maxVersion')
+
+                channel_list = set([])
+                        
+                for version in possible_versions:
+                    try:
+                        if Version_Checker(version) >= Version_Checker(min_version) and Version_Checker(version) <= Version_Checker(max_version):
+                            available_versions.add(version)
+                            channel_list.add(temp_channel_version_map.get(version))
+                            if version == max_version:
+                                newest_channel[name] = temp_channel_version_map.get(version)
+                            continue
+                    except Exception as e:
+                        app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}") 
+                        
+                    try:
+                        temp_version=version.split("-")[0]
+                        temp_max_version=max_version.split("-")[0]
+                        temp_min_version=min_version.split("-")[0]
+                        if Version_Checker(temp_version) >= Version_Checker(temp_min_version) and Version_Checker(temp_version) <= Version_Checker(temp_max_version):
+                            available_versions.add(version)
+                            channel_list.add(temp_channel_version_map.get(version))
+                            if temp_version == temp_max_version:
+                                newest_channel[name] = temp_channel_version_map.get(version)
+                            continue
+                    except Exception as e:
+                        app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}") 
+
+                    try:
+                        temp_version=version.split("+")[0]
+                        temp_max_version=max_version.split("+")[0]
+                        temp_min_version=min_version.split("+")[0]
+                        if Version_Checker(temp_version) >= Version_Checker(temp_min_version) and Version_Checker(temp_version) <= Version_Checker(temp_max_version):
+                            available_versions.add(version)
+                            channel_list.add(temp_channel_version_map.get(version))
+                            if temp_version == temp_max_version:
+                                newest_channel[name] = temp_channel_version_map.get(version)
+                            continue
+                    except Exception as e:
+                        app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}") 
+                channels[op_data["name"]] = channel_list
+
+                # Group by catalog
+                catalog = op_data["catalog"] or 'registry.redhat.io/redhat/redhat-operator-index'
+                catalog_to_operators.setdefault(catalog, []).append(op_entry)
             # Add operators for each catalog, passing full operator dicts
             ocp_version = data.get('ocp_versions', [None])[0] or data.get('ocp_min_version') or data.get('ocp_max_version')
             for catalog, ops in catalog_to_operators.items():
-                generator.add_operators(ops, catalog, channels, ocp_version=ocp_version)
-        
+                generator.add_operators(ops, catalog, channels, ocp_version=ocp_version, newest_channel=newest_channel)
+
         # Add additional images
         if data.get('additional_images'):
             images = []

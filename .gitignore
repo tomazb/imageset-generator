@@ -53,3 +53,7 @@ Thumbs.db
 .env.test.local
 .env.production.local
 .oc-mirror.log
+
+
+#Virtualenv
+.venv
