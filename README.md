@@ -1,6 +1,6 @@
 # OpenShift ImageSetConfiguration Generator
 
-This tool generates ImageSetConfiguration files for OpenShift disconnected installations using the oc-mirror tool. It takes OCP versions and operator suggestions as input and creates a YAML configuration that can be used to mirror container images and operators for air-gapped environments.
+This tool generates ImageSetConfiguration files for OpenShift disconnected installations using the oc-mirror tool. It takes OCP versions and operator suggestions as input and creates a YAML configuration that can be used to mirror container images and operators for air-gapped environments.The data used by the tool is stored in the data subfolder to have it refreshed run rm -rf ./data/*.
 
 ## Quick Start
 
