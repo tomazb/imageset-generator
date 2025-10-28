@@ -296,13 +296,182 @@ def refresh_versions():
     })
 
 @app.route('/api/operators/refresh', methods=['POST'])
+def _get_operator_file_paths(catalog_index, version):
+    """
+    Generate file paths for operator data storage.
+    
+    Args:
+        catalog_index: Catalog index name (e.g., 'redhat-operator-index')
+        version: Version string (e.g., 'v4.18')
+    
+    Returns:
+        Tuple of (main_path, index_path, data_path, channel_path)
+    """
+    base_name = f"operators-{catalog_index}-{version}"
+    return (
+        os.path.join("data", f"{base_name}.json"),
+        os.path.join("data", f"{base_name}-index.json"),
+        os.path.join("data", f"{base_name}-data.json"),
+        os.path.join("data", f"{base_name}-channel.json")
+    )
+
+def _render_catalog_index(catalog, output_path):
+    """
+    Render catalog using OPM and save to file.
+    
+    Args:
+        catalog: Full catalog URL
+        output_path: Path to save rendered output
+    
+    Raises:
+        subprocess.CalledProcessError: If OPM command fails
+    """
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        return  # File already exists and is not empty
+    
+    with open(output_path, 'w') as f:
+        cmd = build_opm_command(catalog, output_format='json')
+        subprocess.run(cmd, stdout=f, check=True)
+
+def _extract_operator_data(index_path, output_path):
+    """
+    Extract operator field data using jq filter.
+    
+    Args:
+        index_path: Path to catalog index file
+        output_path: Path to save filtered data
+    
+    Raises:
+        subprocess.CalledProcessError: If jq command fails
+    """
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        return  # File already exists and is not empty
+    
+    jq_filter = '''
+    select(.schema == "olm.bundle")
+    | [
+        .package,
+        .name,
+        (.properties[]? | select(.type == "olm.package") | .value.version),
+        ((.properties[]? | select(.type == "olm.csv.metadata") | .value.keywords | join(",")) // ""),
+        (.properties[]? | select(.type == "olm.csv.metadata") | .value.annotations.description),
+        (.properties[]? | select(.schema == "olm.channel") | .name)
+    ] | @tsv
+    '''
+    
+    cmd = ["jq", "-r", jq_filter]
+    with open(index_path, "r") as infile, open(output_path, "w") as outfile:
+        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
+
+def _extract_channel_data(index_path, output_path):
+    """
+    Extract operator channel data using jq filter.
+    
+    Args:
+        index_path: Path to catalog index file
+        output_path: Path to save channel data
+    
+    Raises:
+        subprocess.CalledProcessError: If jq command fails
+    """
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        return  # File already exists and is not empty
+    
+    jq_filter = '''
+    select(.schema == "olm.channel")
+    | [.package, .name, .entries[]?.name, .channelName] | @tsv
+    '''
+    
+    cmd = ["jq", "-r", jq_filter]
+    with open(index_path, "r") as infile, open(output_path, "w") as outfile:
+        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
+
+def _find_operator_channel(operator_name, channel_path):
+    """
+    Find the channel for a specific operator.
+    
+    Args:
+        operator_name: Name of the operator to search for
+        channel_path: Path to channel data file
+    
+    Returns:
+        Channel name if found, empty string otherwise
+    """
+    try:
+        with open(channel_path, "r") as f:
+            for line in f:
+                if operator_name in line:
+                    fields = line.strip().split('\t')
+                    if len(fields) > 1 and fields[1]:
+                        return fields[1]
+    except Exception as e:
+        app.logger.warning(f"Could not find channel for {operator_name}: {e}")
+    
+    return ""
+
+def _parse_operator_data(data_path, channel_path):
+    """
+    Parse TSV operator data and enrich with channel information.
+    
+    Args:
+        data_path: Path to operator data TSV file
+        channel_path: Path to channel data TSV file
+    
+    Returns:
+        List of operator dictionaries
+    """
+    operators = []
+    
+    with open(data_path, "r") as f:
+        lines = [line for line in f if line.strip()]
+        
+        for line in lines:
+            fields = line.strip().split('\t')
+            
+            if len(fields) < 3:
+                continue  # Skip malformed lines
+            
+            operator = {
+                "package": fields[0],
+                "name": fields[0],
+                "version": fields[2] if len(fields) > 2 else ""
+            }
+            
+            # Add optional fields if available
+            if len(fields) >= 5:
+                operator["keywords"] = fields[3].split(",") if fields[3] else []
+                operator["description"] = fields[4]
+                operator["channel"] = fields[5] if len(fields) > 5 else ""
+            
+            # Find channel from channel file if not set or to override
+            if len(fields) > 1 and fields[1]:
+                channel = _find_operator_channel(fields[1], channel_path)
+                if channel:
+                    operator["channel"] = channel
+            
+            operators.append(operator)
+    
+    return operators
+
+def _cleanup_intermediate_files(*file_paths):
+    """
+    Remove intermediate processing files.
+    
+    Args:
+        *file_paths: Variable number of file paths to remove
+    """
+    for path in file_paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as e:
+            app.logger.error(f"Error removing {path}: {e}")
+
 def refresh_ocp_operators(catalog=None, version=None):
     """Refresh the list of available OCP operators"""
     app.logger.debug("Refreshing OCP operators...")
     
-    operator_output=[]
-    
-    
+    # Validate required parameters
     if catalog is None:
         return jsonify({
             'status': 'error',
@@ -310,159 +479,59 @@ def refresh_ocp_operators(catalog=None, version=None):
             'timestamp': datetime.now().isoformat()
         }), 400
 
+    # Extract version from catalog if not provided
     if version is None or not version.strip():
         version = catalog.split(':')[-1]
 
-    #Get File static path
-    catalog_index= (catalog.split('/')[-1]).split(':')[0]
-    static_file_path = os.path.join("data", f"operators-{catalog_index}-{version}.json")
-    static_file_path_index = os.path.join("data", f"operators-{catalog_index}-{version}-index.json")
-    static_file_path_data = os.path.join("data", f"operators-{catalog_index}-{version}-data.json")
-    static_file_path_channel = os.path.join("data", f"operators-{catalog_index}-{version}-channel.json")
+    # Generate file paths
+    catalog_index = (catalog.split('/')[-1]).split(':')[0]
+    main_path, index_path, data_path, channel_path = _get_operator_file_paths(catalog_index, version)
 
-
-    #Get index file Example - opm render  registry.redhat.io/redhat/redhat-operator-index:v4.9 > redhat-operator-index.v4.9
-    # Render the catalog and save to static files
     try:
-        if not os.path.exists(static_file_path_index) or os.path.getsize(static_file_path_index) == 0:
-            with open(static_file_path_index, 'w') as f:
-                cmd = build_opm_command(catalog, output_format='json')
-                subprocess.run(cmd, stdout=f, check=True)
+        # Step 1: Render catalog index
+        _render_catalog_index(catalog, index_path)
+        
+        # Step 2: Extract operator data
+        _extract_operator_data(index_path, data_path)
+        
+        # Step 3: Extract channel data
+        _extract_channel_data(index_path, channel_path)
+        
+        # Step 4: Parse and combine data
+        operators = _parse_operator_data(data_path, channel_path)
+        
+        # Step 5: Write final output
+        with open(main_path, "w") as f:
+            json.dump({
+                "operators": operators,
+                "count": len(operators),
+                "source": "opm",
+                "timestamp": datetime.now().isoformat()
+            }, f, indent=2)
+        
+        # Step 6: Cleanup intermediate files
+        _cleanup_intermediate_files(index_path, data_path, channel_path)
+        
+        return jsonify({
+            'status': 'success',
+            'data': operators,
+            'timestamp': datetime.now().isoformat()
+        })
+        
     except subprocess.CalledProcessError as e:
-        app.logger.error(f"Error running opm render: {e}")
+        app.logger.error(f"Error processing catalog: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Failed to refresh operators: {str(e)}',
             'timestamp': datetime.now().isoformat()
         }), 500
-        
-    
-    #If index file exists use jq to filter Operator Index
-    #Get Operator Field Data
-    if os.path.exists(static_file_path_index):
-        jq_filter = '''
-        select(.schema == "olm.bundle")
-        | [
-            .package,
-            .name,
-            (.properties[]? | select(.type == "olm.package") | .value.version),
-            ((.properties[]? | select(.type == "olm.csv.metadata") | .value.keywords | join(",")) // ""),
-            (.properties[]? | select(.type == "olm.csv.metadata") | .value.annotations.description),
-            (.properties[]? | select(.schema == "olm.channel") | .name)
-        ] | @tsv
-        '''
-
-        cmd = [
-            "jq", "-r", jq_filter
-        ]
-
-        try:
-            if not os.path.exists(static_file_path_data) or os.path.getsize(static_file_path_data) == 0:
-                with open(static_file_path_index, "r") as infile, open(static_file_path_data, "w") as outfile:
-                    subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
-        except subprocess.CalledProcessError as e:
-            app.logger.error(f"Error running jq: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': f'Failed to refresh operators: {str(e)}',
-                'timestamp': datetime.now().isoformat()
-            }), 500
-        
-        #Get operator Channel Data
-        jq_filter_channel = '''
-        select(.schema == "olm.channel")
-        | [.package, .name, .entries[]?.name, .channelName] | @tsv
-        '''      
-
-        cmd_channel = [
-            "jq", "-r", jq_filter_channel
-        ]
-        
-        try:
-            if not os.path.exists(static_file_path_channel) or os.path.getsize(static_file_path_channel) == 0:
-                with open(static_file_path_index, "r") as infile, open(static_file_path_channel, "w") as outfile:
-                    subprocess.run(cmd_channel, stdin=infile, stdout=outfile, check=True)
-        except subprocess.CalledProcessError as e:
-            app.logger.error(f"Error running jq: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': f'Failed to refresh operators: {str(e)}',
-                'timestamp': datetime.now().isoformat()
-            }), 500
-            
-    
-        #Parse TSV Output Files to get Data
-        try:
-            with open(static_file_path_data, "r") as f:
-                data = f.read()
-                # Process the TSV data as needed
-                lines = data.strip().split('\n')
-                #Skip empty lines
-                lines = [line for line in lines if line.strip()]
-                for line in lines:
-                    fields = line.split('\t')
-                    # Do something with the fields
-                    if len(fields) < 5:
-                        operator_output.append({
-                            "package": fields[0],
-                            "name": fields[0],
-                            "version": fields[2]
-                        })
-                    if len(fields) >= 5:
-                        operator_output.append({
-                            "package": fields[0],
-                            "name": fields[0],
-                            "version": fields[2],
-                            "keywords": fields[3].split(",") if fields[3] else [],
-                            "description": fields[4],
-                            "channel": fields[5] if len(fields) > 5 else ""
-                        })
-                        
-                    #Search Channel File for Channel that matches name
-                    if fields[1] is not None:
-                        with open(static_file_path_channel, "r") as f:
-                            channel_data = f.read()
-                            # Process the channel data as needed
-                            lines = channel_data.strip().split('\n')
-                            lines = [line for line in lines if line.strip()]
-                            for line in lines:
-                                if fields[1] in line:
-                                    channel_fields = line.split('\t')
-                                    if channel_fields[1] is not None:
-                                        operator_output[-1]["channel"] = channel_fields[1]
-                                        break
-
-        except Exception as e:
-            app.logger.error(f"Error reading TSV file: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': f'Failed to refresh operators: {str(e)}',
-                'timestamp': datetime.now().isoformat()
-            }), 500
-
-        #Write Output to file
-        with open(static_file_path, "w") as f:
-            json.dump({
-                "operators": operator_output,
-                "count": len(operator_output),
-                "source": "opm",
-                "timestamp": datetime.now().isoformat()
-            }, f, indent=2)
-
-        #Remove intermediate files
-        try:
-            os.remove(static_file_path_index)
-            os.remove(static_file_path_channel)
-            os.remove(static_file_path_data)
-        except Exception as e:
-            app.logger.error(f"Error removing intermediate files: {e}")
-
-        #return operator_output
+    except Exception as e:
+        app.logger.error(f"Error refreshing operators: {e}")
         return jsonify({
-            'status': 'success',
-            'data': operator_output,
+            'status': 'error',
+            'message': f'Failed to refresh operators: {str(e)}',
             'timestamp': datetime.now().isoformat()
-        })
+        }), 500
 
 @app.route('/api/releases/refresh', methods=['POST'])
 def refresh_ocp_releases(version=None, channel=None):
