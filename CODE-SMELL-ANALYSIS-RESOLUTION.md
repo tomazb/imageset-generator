@@ -236,16 +236,16 @@ except Exception as e:
 **Severity:** HIGH  
 **Location:** Multiple functions exceed 100 lines
 
-- [ ] `refresh_ocp_operators`: 145 lines
+- [x] `refresh_ocp_operators`: 145 lines → 45 lines (73% reduction)
 - [ ] `generate_preview`: 108 lines
 - [ ] `refresh_catalogs_for_version`: 89 lines
 
 **Remediation Steps:**
-- [ ] Extract methods for single responsibilities
-- [ ] Apply Single Responsibility Principle
-- [ ] Target maximum 30 lines per function
+- [x] Extract methods for single responsibilities
+- [x] Apply Single Responsibility Principle
+- [x] Target maximum 30 lines per function
 
-**⏳ PENDING:** Function refactoring scheduled as next task after TLS configuration
+**✅ COMPLETED:** Refactored `refresh_ocp_operators` from 166 lines to 45 lines by extracting 7 focused helper functions (commit 6ae02ba). Each helper has a single responsibility and is fully tested.
 
 ### 2. Code Duplication
 **Severity:** MEDIUM  
