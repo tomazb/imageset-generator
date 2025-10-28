@@ -41,11 +41,11 @@ def sanitize_catalog_url(url):
 - [ ] **Impact:** Man-in-the-middle attacks, data tampering
 
 **Remediation Steps:**
-- [ ] Remove hardcoded TLS skip flags
-- [ ] Implement proper certificate management
-- [ ] Add configuration option for TLS verification with proper warnings
+- [x] Remove hardcoded TLS skip flags
+- [x] Implement proper certificate management
+- [x] Add configuration option for TLS verification with proper warnings
 
-**⏳ IN PROGRESS:** Created `TLS_VERIFY` constant in `constants.py` (commit 083be26), integration into app.py pending
+**✅ COMPLETED:** Created `build_opm_command()` helper with TLS_VERIFY constant integration (commit 6a498d2). TLS verification now defaults to True (secure by default) and can be overridden via constants.py or explicit parameter.
 
 ### 3. Path Traversal Vulnerability
 **Severity:** HIGH  
