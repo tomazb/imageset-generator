@@ -1,0 +1,19 @@
+{
+  "default": true,
+  "MD013": false,
+  "MD033": false,
+  "MD041": false,
+  "MD009": {
+    "br_spaces": 2
+  },
+  "MD022": {
+    "lines_above": 1,
+    "lines_below": 1
+  },
+  "MD031": {
+    "list_items": true
+  },
+  "MD032": {
+    "list_items": true
+  }
+}

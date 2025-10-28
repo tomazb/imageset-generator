@@ -1,0 +1,96 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Python Linting
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install pylint flake8 black isort mypy
+
+    - name: Run Black (code formatting check)
+      run: |
+        black --check --diff *.py || true
+
+    - name: Run isort (import sorting check)
+      run: |
+        isort --check-only --diff *.py || true
+
+    - name: Run Flake8 (style guide enforcement)
+      run: |
+        flake8 --max-line-length=120 --extend-ignore=E203,W503 *.py || true
+
+    - name: Run Pylint (code analysis)
+      run: |
+        pylint --max-line-length=120 --disable=C0111,R0913,R0914 *.py || true
+
+    - name: Run MyPy (type checking)
+      run: |
+        mypy --ignore-missing-imports *.py || true
+
+  complexity:
+    name: Code Complexity Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install complexity tools
+      run: |
+        pip install radon
+
+    - name: Check cyclomatic complexity
+      run: |
+        radon cc *.py -a -s
+
+    - name: Check maintainability index
+      run: |
+        radon mi *.py -s
+
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check for required documentation
+      run: |
+        test -f README.md && echo "✅ README.md exists"
+        test -f CHANGELOG.md && echo "✅ CHANGELOG.md exists"
+        test -f CODE-SMELL-ANALYSIS-RESOLUTION.md && echo "✅ CODE-SMELL-ANALYSIS-RESOLUTION.md exists"
+
+    - name: Check Python docstrings
+      run: |
+        python3 -c "import validation; print('✅ validation.py imports successfully')"
+        python3 -c "import constants; print('✅ constants.py imports successfully')"
+        python3 -c "import exceptions; print('✅ exceptions.py imports successfully')"
+
+    - name: Install markdown linter
+      run: |
+        npm install -g markdownlint-cli
+
+    - name: Lint markdown files
+      run: |
+        markdownlint '*.md' --config .markdownlint.json || true

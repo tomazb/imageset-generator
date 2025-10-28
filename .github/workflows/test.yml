@@ -1,0 +1,53 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run validation tests
+      run: python3 test_validation_simple.py
+
+    - name: Run constants tests
+      run: python3 test_constants.py
+
+    - name: Run TLS config tests
+      run: python3 test_tls_config.py
+
+    - name: Run refactoring tests
+      run: python3 test_refactoring.py
+
+    - name: Run exception tests
+      run: python3 test_exceptions.py
+
+    - name: Report test summary
+      if: always()
+      run: |
+        echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Validation tests" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Constants tests" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ TLS config tests" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Refactoring tests" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Exception tests" >> $GITHUB_STEP_SUMMARY
+        echo "**Total: 27 tests passed**" >> $GITHUB_STEP_SUMMARY

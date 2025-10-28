@@ -1,5 +1,10 @@
 # OpenShift ImageSetConfiguration Generator
 
+[![Python Tests](https://github.com/tomazb/imageset-generator/actions/workflows/test.yml/badge.svg)](https://github.com/tomazb/imageset-generator/actions/workflows/test.yml)
+[![Security Scan](https://github.com/tomazb/imageset-generator/actions/workflows/security.yml/badge.svg)](https://github.com/tomazb/imageset-generator/actions/workflows/security.yml)
+[![Container Build](https://github.com/tomazb/imageset-generator/actions/workflows/container.yml/badge.svg)](https://github.com/tomazb/imageset-generator/actions/workflows/container.yml)
+[![Code Quality](https://github.com/tomazb/imageset-generator/actions/workflows/quality.yml/badge.svg)](https://github.com/tomazb/imageset-generator/actions/workflows/quality.yml)
+
 This tool generates ImageSetConfiguration files for OpenShift disconnected installations using the oc-mirror tool. It takes OCP versions and operator suggestions as input and creates a YAML configuration that can be used to mirror container images and operators for air-gapped environments.  
 The data used by the tool is stored in the data subfolder.To have it refreshed run rm -rf ./data/*.
 
@@ -242,3 +247,18 @@ See LICENSE file for details.
 
 - [CHANGELOG.md](CHANGELOG.md) - Detailed change history
 - [CODE-SMELL-ANALYSIS-RESOLUTION.md](CODE-SMELL-ANALYSIS-RESOLUTION.md) - Security audit and improvements
+- [CI_DOCUMENTATION.md](CI_DOCUMENTATION.md) - CI/CD pipeline documentation
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for automated testing, security scanning, and container builds:
+
+- **Python Tests** - 27 tests across Python 3.10-3.13
+- **Security Scans** - Bandit, Safety, CodeQL, Trivy (weekly + on PR)
+- **Container Builds** - Docker/Podman builds with vulnerability scanning
+- **Code Quality** - Linting, complexity checks, type checking
+- **Dependency Updates** - Automated Dependabot updates
+
+Container images published to: `ghcr.io/tomazb/imageset-generator`
+
+See [CI_DOCUMENTATION.md](CI_DOCUMENTATION.md) for detailed pipeline information.
