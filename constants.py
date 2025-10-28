@@ -5,6 +5,8 @@ Constants for ImageSet Generator
 Centralized configuration constants for timeouts, ports, patterns, and defaults.
 """
 
+import os
+
 # Network Timeouts (seconds)
 TIMEOUT_OC_MIRROR_SHORT = 30      # For list operations
 TIMEOUT_OC_MIRROR_MEDIUM = 120    # For catalog listings
@@ -13,9 +15,8 @@ TIMEOUT_OPM_RENDER = 180          # For opm render commands
 TIMEOUT_CATALOG_DISCOVERY = 300   # For catalog discovery
 
 # Server Configuration
-DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 5000
-DEBUG_MODE = True
+DEBUG_MODE = os.environ.get('DEBUG_MODE', 'False').lower() == 'true'
 
 # Version Patterns
 VERSION_PATTERN = r'^\d+\.\d+$'                    # X.Y format

@@ -295,7 +295,6 @@ def refresh_versions():
         'source': 'oc-mirror'
     })
 
-@app.route('/api/operators/refresh', methods=['POST'])
 def _get_operator_file_paths(catalog_index, version):
     """
     Generate file paths for operator data storage.
@@ -467,6 +466,7 @@ def _cleanup_intermediate_files(*file_paths):
         except Exception as e:
             app.logger.error(f"Error removing {path}: {e}")
 
+@app.route('/api/operators/refresh', methods=['POST'])
 def refresh_ocp_operators(catalog=None, version=None):
     """Refresh the list of available OCP operators"""
     app.logger.debug("Refreshing OCP operators...")

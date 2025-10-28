@@ -112,7 +112,8 @@ def validate_channel(channel: str) -> str:
     channel = channel.strip()
     
     # Channel format: <name>-X.Y where name is alphanumeric with hyphens
-    pattern = r'^[a-zA-Z][a-zA-Z0-9\-]*\d+\.\d+$'
+    # Must have a hyphen before the version number
+    pattern = r'^[a-zA-Z][a-zA-Z0-9\-]*-\d+\.\d+$'
     
     if not re.match(pattern, channel):
         raise ValidationError(

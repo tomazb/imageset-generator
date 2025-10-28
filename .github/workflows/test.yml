@@ -45,9 +45,16 @@ jobs:
       if: always()
       run: |
         echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Validation tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Constants tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ TLS config tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Refactoring tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Exception tests" >> $GITHUB_STEP_SUMMARY
-        echo "**Total: 27 tests passed**" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ **All tests passed successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Validation tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Constants tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TLS config tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Refactoring tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Exception tests" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Some tests failed. Please review the logs above.**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the individual test steps to see which tests failed." >> $GITHUB_STEP_SUMMARY
+        fi
