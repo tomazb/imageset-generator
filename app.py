@@ -18,6 +18,33 @@ import tempfile
 from datetime import datetime
 from generator import ImageSetGenerator
 import traceback
+from constants import TLS_VERIFY, TIMEOUT_OPM_RENDER
+
+def build_opm_command(catalog_url, output_format='yaml', skip_tls=None):
+    """
+    Build OPM render command with configurable TLS verification.
+    
+    Args:
+        catalog_url: Full catalog URL (e.g., registry.redhat.io/redhat/redhat-operator-index:v4.18)
+        output_format: Output format for OPM (default: 'yaml', can be 'json')
+        skip_tls: Override TLS verification (None uses TLS_VERIFY constant from constants.py)
+    
+    Returns:
+        List of command arguments for subprocess
+    """
+    cmd = ['opm', 'render']
+    
+    # Use provided skip_tls value, or default to TLS_VERIFY constant
+    should_skip_tls = skip_tls if skip_tls is not None else not TLS_VERIFY
+    
+    if should_skip_tls:
+        cmd.append('--skip-tls')
+    
+    if output_format == 'json':
+        cmd.extend(['--output', 'json'])
+    
+    cmd.append(catalog_url)
+    return cmd
 
 def process_operator_data(operator):
     """Process operator data to handle selected versions and other parameters"""
@@ -113,8 +140,8 @@ def get_operators_from_opm(catalog_url, version_key):
     """Get operators from a catalog using opm render"""
     try:
         full_catalog = f"{catalog_url}:v{version_key}"
-        cmd = ['opm', 'render', '--skip-tls', full_catalog]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        cmd = build_opm_command(full_catalog)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_OPM_RENDER)
         
         if result.returncode != 0:
             raise Exception(f"opm render failed: {result.stderr}")
@@ -294,12 +321,13 @@ def refresh_ocp_operators(catalog=None, version=None):
     static_file_path_channel = os.path.join("data", f"operators-{catalog_index}-{version}-channel.json")
 
 
-    #Get index file Example - opm render  --skip-tls registry.redhat.io/redhat/redhat-operator-index:v4.9 > redhat-operator-index.v4.9
+    #Get index file Example - opm render  registry.redhat.io/redhat/redhat-operator-index:v4.9 > redhat-operator-index.v4.9
     # Render the catalog and save to static files
     try:
         if not os.path.exists(static_file_path_index) or os.path.getsize(static_file_path_index) == 0:
             with open(static_file_path_index, 'w') as f:
-                subprocess.run(['opm', 'render', catalog, '--skip-tls-verify','--output', 'json'], stdout=f, check=True)
+                cmd = build_opm_command(catalog, output_format='json')
+                subprocess.run(cmd, stdout=f, check=True)
     except subprocess.CalledProcessError as e:
         app.logger.error(f"Error running opm render: {e}")
         return jsonify({
