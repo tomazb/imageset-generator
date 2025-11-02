@@ -24,6 +24,24 @@
 - Standardize configuration usage: replace hardcoded paths and constants with values from `src/config/settings.py` (`config`).
 - Verify every new package directory contains an `__init__.py` for proper package discovery.
 - Scope pytest discovery to `src/tests` to avoid picking up legacy tests during the transition.
+- Favor absolute imports from the `src.` namespace once files move; reserve relative imports for intra-package helpers.
+- Establish and run a lightweight guard-test suite before and after each relocation to catch regressions early.
+
+---
+
+## Phase 0: Guard Baseline (Pre-Week 1)
+
+### 0.1 Establish Guard Test Suite
+
+- [ ] Add a lightweight pytest module (e.g., `tests/guard/test_generator_smoke.py`) that exercises the current `ImageSetGenerator` happy path and captures expected YAML excerpts.
+- [ ] Add an API smoke test that boots the Flask app with its current layout and verifies `/api/generate/preview` responds `200` with expected keys.
+- [ ] Document the guard suite in `README.md` (or this plan) and ensure it runs via `pytest tests/guard -q`.
+
+### 0.2 Run Guard Suite on Every Structural Change
+
+- [ ] Execute the guard tests before any file moves to capture the current baseline.
+- [ ] Re-run the suite after each module relocation or import adjustment; treat failures as blockers before progressing.
+- [ ] Record run results in commit messages or a short log to demonstrate coverage during the migration.
 
 ---
 
@@ -35,25 +53,30 @@
 
 #### 1.1.1 Create Directory Structure
 ```bash
-mkdir -p src/{api,core,models,utils,tests}
+mkdir -p src/{api,config,core,models,utils,tests}
 touch src/__init__.py
 touch src/api/__init__.py
+touch src/config/__init__.py
 touch src/core/__init__.py
 touch src/models/__init__.py
 touch src/utils/__init__.py
 ```
 
 #### 1.1.2 Move Files Incrementally
-- [ ] **Step 1:** Copy (don't move yet) files to new structure
+- [ ] **Step 1:** Move files one module at a time with `git mv`, running guard tests after each move
   - `generator.py` → `src/core/generator.py`
   - `validation.py` → `src/core/validation.py`
   - `constants.py` → `src/config/constants.py`
   - `exceptions.py` → `src/core/exceptions.py`
+  ```bash
+  git mv generator.py src/core/generator.py
+  pytest tests/guard -q
+  ```
 
-- [ ] **Step 2:** Update imports in copied files to use relative imports
+- [ ] **Step 2:** Update imports in moved files to use absolute paths via the new `src.` namespace
   ```python
   # Old: from validation import validate_config
-  # New: from ..core.validation import validate_config
+  # New: from src.core.validation import validate_config
   ```
 
 - [ ] **Step 3:** Create `src/api/routes/` for Flask routes
