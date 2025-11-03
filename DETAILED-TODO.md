@@ -1,8 +1,11 @@
 # ImageSet Generator Refactoring Plan (Pragmatic Approach)
 
 **Created:** October 30, 2025  
+**Last Updated:** November 2, 2025  
+**Status:** Updated with Review Recommendations  
 **Approach:** Incremental refactoring without framework changes or over-engineering  
-**Goal:** Improve code quality and maintainability while keeping Flask and current architecture
+**Goal:** Improve code quality and maintainability while keeping Flask and current architecture  
+**Estimated Duration:** 8-9 weeks (Phase 6 optional)
 
 ---
 
@@ -45,7 +48,84 @@
 
 ---
 
-## Phase 1: Code Structure & Organization (Week 1-2)
+## Phase 0.5: Environment & Tooling Setup (Pre-Week 1)
+
+### 0.5.1 Package Management Setup
+
+- [ ] Create `pyproject.toml` for package management with project metadata
+- [ ] Configure package to make `src/` an installable package (avoids PYTHONPATH issues)
+- [ ] Update Python version targets to include 3.10-3.13 (current environment is 3.13)
+- [ ] Add basic project metadata (name, version, description, dependencies)
+
+```toml
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imageset-generator"
+version = "1.0.0"
+description = "OpenShift ImageSetConfiguration Generator"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0",
+    "Flask>=2.3.0",
+    "Flask-CORS>=4.0.0",
+    "packaging>=25.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-flask>=1.2.0",
+    "python-dotenv>=1.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+]
+```
+
+### 0.5.2 Development Environment Configuration
+
+- [ ] Add `python-dotenv` to requirements-dev.txt for .env file support (lightweight, no Pydantic needed)
+- [ ] Create initial `pytest.ini` configuration that works with current structure
+- [ ] Verify virtual environment has all necessary dev dependencies
+- [ ] Document development environment setup in README.md
+
+```ini
+# pytest.ini (initial version for current structure)
+[pytest]
+testpaths = .
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts = -v --tb=short
+```
+
+### 0.5.3 Pre-Migration Testing Setup
+
+- [ ] Configure pytest to discover tests in current location (root *.py files)
+- [ ] Run existing 27 tests to establish baseline: `test_validation_simple.py`, `test_constants.py`, `test_tls_config.py`, `test_refactoring.py`, `test_exceptions.py`
+- [ ] Document test execution results as pre-refactoring baseline
+- [ ] Create a simple test runner script for convenience
+
+```bash
+#!/bin/bash
+# scripts/run_tests.sh
+echo "Running all tests..."
+python3 test_validation_simple.py
+python3 test_constants.py
+python3 test_tls_config.py
+python3 test_refactoring.py
+python3 test_exceptions.py
+echo "All tests completed!"
+```
+
+---
+
+## Phase 1: Code Structure & Organization - Small Files (Week 1)
 
 ### 1.1 Create Source Directory Structure
 
@@ -64,7 +144,7 @@ touch src/utils/__init__.py
 
 #### 1.1.2 Move Files Incrementally
 - [ ] **Step 1:** Move files one module at a time with `git mv`, running guard tests after each move
-  - `generator.py` → `src/core/generator.py`
+  - Defer `generator.py` move to Phase 1.5
   - `validation.py` → `src/core/validation.py`
   - `constants.py` → `src/config/constants.py`
   - `exceptions.py` → `src/core/exceptions.py`
@@ -137,7 +217,19 @@ DATA_DIR=data
 FRONTEND_DIR=frontend/build
 ```
 
-#### 1.2.3 Replace Hardcoded Paths and Constants
+#### 1.2.3 Add Development Environment Support
+
+- [ ] Add `python-dotenv` to `requirements-dev.txt` (lightweight .env file support)
+- [ ] Load `.env` file in development mode only; keep production using environment variables directly
+```python
+# In development, optionally load .env
+import os
+if os.getenv("FLASK_ENV") == "development":
+    from dotenv import load_dotenv
+    load_dotenv()
+```
+
+#### 1.2.4 Replace Hardcoded Paths and Constants
 
 - [ ] Search and replace usages of `TLS_VERIFY`, `TIMEOUT_OPM_RENDER`, and data/front-end paths to read from `src/config/settings.py` (`config`).
 - [ ] Remove duplicated constants once migration is complete to avoid drift.
@@ -145,6 +237,15 @@ FRONTEND_DIR=frontend/build
     - App starts and serves the frontend without path issues
     - OPM command respects TLS env setting
     - Unit tests pass
+
+---
+
+### Phase 1.5: Large File Refactoring (Week 2)
+
+- [ ] Extract routes from `app.py` (73KB) into blueprints under `src/api/routes/` before or during move
+- [ ] Defer moving `app.py` until blueprints are registered and smoke-tested
+- [ ] Move `generator.py` to `src/core/generator.py` if not already moved; perform any necessary refactors
+- [ ] Re-run guard tests and API smoke tests after each extraction/move
 
 ---
 
@@ -378,6 +479,16 @@ def add_operators(
 
 ## Phase 3: Testing & Quality Assurance (Week 5-6)
 
+### 3.0 Test Migration Strategy
+
+#### 3.0.1 Migrate Existing Tests
+- [ ] Create transition plan for existing 27 tests in project root
+- [ ] Option A: Move existing tests to `src/tests/legacy/` temporarily
+- [ ] Option B: Keep root tests working while creating new tests in `src/tests/`
+- [ ] Update `pytest.ini` to discover tests in both locations during transition
+- [ ] Gradually migrate or rewrite tests to use new import paths
+- [ ] Remove old tests only after new tests achieve equivalent coverage
+
 ### 3.1 Unit Tests
 
 #### 3.1.1 Create Test Structure
@@ -563,6 +674,9 @@ flake8>=6.0.0
 isort>=5.12.0
 mypy>=1.5.0
 
+# Utilities
+python-dotenv>=1.0.0
+
 # Type stubs
 types-PyYAML
 types-Flask
@@ -573,7 +687,7 @@ types-Flask
 ```toml
 [tool.black]
 line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -591,7 +705,7 @@ multi_line_output = 3
 include_trailing_comma = true
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -768,7 +882,30 @@ src/
 
 ---
 
-## Phase 6: Performance Optimization (Only If Needed)
+## Phase 5.5: CI/CD Pipeline Updates (Week 8)
+
+### 5.5.1 Update GitHub Actions Workflows
+- [ ] Review and update `.github/workflows/test.yml` for new structure
+- [ ] Update `.github/workflows/quality.yml` for new linting paths
+- [ ] Update `.github/workflows/container.yml` for Dockerfile changes
+- [ ] Update `.github/workflows/security.yml` if scan paths change
+- [ ] Test all workflows in a feature branch before merging
+
+### 5.5.2 Update Container Build Configuration
+- [ ] Review and update `Containerfile`/`Dockerfile` for new `src/` structure
+- [ ] Update `PYTHONPATH` or `WORKDIR` as needed
+- [ ] Verify container builds and runs with new structure
+- [ ] Update `start-podman.sh` if launcher changes are needed
+- [ ] Test container locally before pushing changes
+
+### 5.5.3 Deployment Documentation
+- [ ] Create `docs/MIGRATION_GUIDE.md` documenting import path changes
+- [ ] Update deployment instructions for new structure
+- [ ] Document rollback procedures for each phase
+- [ ] Create upgrade guide for existing deployments
+
+---
+
 ## Phase 6: Performance Optimization (Only If Needed)
 
 **Note:** Only implement if you identify actual performance issues
@@ -896,46 +1033,37 @@ test: add unit tests for operator processor
 chore: update dependencies
 ```
 
+### Rollback Strategy
+
+For each phase:
+- [ ] Create git tag before starting phase (e.g., `pre-phase-1`, `pre-phase-2`)
+- [ ] Keep feature branches until verified in production
+- [ ] Document rollback commands for each phase
+- [ ] Test rollback procedure in development environment
+
+Example rollback procedure:
+```bash
+# Rollback to before Phase 1
+git checkout pre-phase-1
+# Or rollback specific files
+git checkout main -- src/
+git checkout main -- app.py
+```
+
 ---
 
 ## Progress Tracking
 
-### Phase 1: Structure (Week 1-2)
-- [ ] Create `src/` directory structure
-- [ ] Move files to new locations
-- [ ] Update imports
-- [ ] Create configuration module
-- [ ] Verify everything works
-
-### Phase 2: Refactoring (Week 3-4)
-- [ ] Create `OperatorProcessor` class
-- [ ] Create `VersionManager` class
-- [ ] Refactor Flask routes into blueprints
-- [ ] Enhance error handling
-- [ ] Add comprehensive type hints
-
-### Phase 3: Testing (Week 5-6)
-- [ ] Setup pytest infrastructure
-- [ ] Write unit tests (target 80% coverage)
-- [ ] Write integration tests
-- [ ] Achieve coverage goals
-
-### Phase 4: Quality (Week 7)
-- [ ] Setup Black, isort, flake8
-- [ ] Configure mypy
-- [ ] Create quality check scripts
-- [ ] Setup pre-commit hooks (optional)
-
-### Phase 5: Documentation (Week 8)
-- [ ] Add comprehensive docstrings
-- [ ] Update README.md
-- [ ] Create API documentation
-- [ ] Document architecture
-
-### Phase 6: Optimization (If Needed)
-- [ ] Profile application for bottlenecks
-- [ ] Add simple caching where beneficial
-- [ ] Optimize data loading
+- [ ] Phase 0: Guard Baseline (Pre-Week 1)
+- [ ] Phase 0.5: Environment & Tooling Setup (Pre-Week 1)  [NEW]
+- [ ] Phase 1: Structure - Small Files (Week 1)  [UPDATED]
+- [ ] Phase 1.5: Large File Refactoring (Week 2)  [NEW]
+- [ ] Phase 2: Code Quality & Refactoring (Week 3-4)
+- [ ] Phase 3: Testing & QA (Week 5-6)
+- [ ] Phase 4: Code Quality Tools (Week 7)
+- [ ] Phase 5: Documentation (Week 8)
+- [ ] Phase 5.5: CI/CD Pipeline Updates (Week 8)  [NEW]
+- [ ] Phase 6: Performance Optimization (If Needed)
 
 ---
 
@@ -965,6 +1093,17 @@ chore: update dependencies
 - Clear week-by-week timeline
 - Concrete code examples for each phase
 - "Only if needed" approach to optimization
+
+
+#### 🆕 Added in Review (November 2025)
+- Phase 0.5 for environment and tooling setup
+- Phase 1.5 for large file refactoring (separate from small file moves)
+- Phase 5.5 for CI/CD pipeline updates
+- python-dotenv for development convenience (lightweight)
+- Test migration strategy for existing 27 tests
+- Rollback procedures for each phase
+- Updated Python version targets (3.10-3.13)
+- Deployment and migration documentation requirements
 
 ---
 
@@ -1040,6 +1179,6 @@ chore: update dependencies
 
 ---
 
-**Last Updated:** October 30, 2025  
-**Status:** Ready for Implementation  
-**Estimated Duration:** 6-8 weeks (Phase 6 optional)
+**Last Updated:** November 2, 2025  
+**Status:** Updated with Review Recommendations  
+**Estimated Duration:** 8-9 weeks (Phase 6 optional)
