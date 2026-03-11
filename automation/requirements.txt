@@ -12,6 +12,3 @@ requests>=2.31.0
 
 # YAML parsing (should already be installed)
 pyyaml>=6.0
-
-# Timezone support
-pytz>=2023.3
