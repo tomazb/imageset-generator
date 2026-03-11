@@ -4,9 +4,6 @@ Test custom exception classes
 Tests exception hierarchy, context preservation, and message formatting
 """
 
-
-# Add the parent directory to the path so we can import exceptions
-
 def test_base_exception():
     """Test base ImageSetGeneratorError exception"""
     from imageset_generator.exceptions import ImageSetGeneratorError

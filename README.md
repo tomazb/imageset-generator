@@ -199,17 +199,13 @@ Run the comprehensive test suite:
 
 ```bash
 # All tests
-python3 test_validation_simple.py   # Input validation (4 tests)
-python3 test_constants.py           # Constants structure (2 tests)
-python3 test_tls_config.py          # TLS configuration (5 tests)
-python3 test_refactoring.py         # Refactored functions (6 tests)
-python3 test_exceptions.py          # Exception classes (10 tests)
+PYTHONPATH=src pytest tests -q
 
-# Quick test all
-for test in test_*.py; do python3 "$test"; done
+# Run a specific test module
+PYTHONPATH=src pytest tests/unit/test_validation_simple.py -q
 ```
 
-**Total: 27 tests, all passing** ✓
+**Current suite:** 46 passing tests, 2 skipped
 
 ## Development
 

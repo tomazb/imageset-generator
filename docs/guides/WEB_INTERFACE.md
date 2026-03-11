@@ -38,7 +38,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Start Flask server
-python app.py --host 127.0.0.1 --port 5000
+python -m imageset_generator.app --host 127.0.0.1 --port 5000
 ```
 
 ### Frontend Setup
@@ -207,7 +207,7 @@ frontend/
 cd frontend && npm run build && cd ..
 
 # Start production server
-python app.py --host 0.0.0.0 --port 5000
+python -m imageset_generator.app --host 0.0.0.0 --port 5000
 ```
 
 ### Docker
@@ -289,7 +289,7 @@ server {
 
 Enable debug logging:
 ```bash
-python app.py --debug
+python -m imageset_generator.app --debug
 ```
 
 Check browser developer tools for frontend issues.

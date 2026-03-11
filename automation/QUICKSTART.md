@@ -101,7 +101,7 @@ kubectl logs -n openshift-imageset-mirror -l app=imageset-automation
 # Trigger automation immediately with dry-run
 kubectl exec -n openshift-imageset-mirror \
   deploy/imageset-automation -- \
-  python -m automation.engine \
+  python -m imageset_generator.automation.engine \
   --config /config/config.yaml \
   --dry-run
 

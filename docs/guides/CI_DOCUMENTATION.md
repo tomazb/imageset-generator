@@ -15,13 +15,9 @@ The project uses GitHub Actions for automated testing, security scanning, code q
 
 **Jobs:**
 - Tests on Python 3.10, 3.11, 3.12, and 3.13
-- Runs all 5 test suites:
-  - `test_validation_simple.py` - Input validation (4 tests)
-  - `test_constants.py` - Constants structure (2 tests)
-  - `test_tls_config.py` - TLS configuration (5 tests)
-  - `test_refactoring.py` - Refactored functions (6 tests)
-  - `test_exceptions.py` - Exception classes (10 tests)
-- **Total: 27 tests**
+- Installs the project in editable mode
+- Runs `pytest tests -q` against the `tests/` tree
+- Covers unit and smoke tests under the `src/` package layout
 
 **Badge:**
 ```markdown
@@ -81,7 +77,7 @@ The project uses GitHub Actions for automated testing, security scanning, code q
 #### Build Podman
 - Tests Containerfile with Podman
 - Ensures Podman compatibility
-- Tests both Containerfile and Dockerfile
+- Verifies the built image can import `imageset_generator.app`
 
 **Image Location:**
 ```
@@ -216,10 +212,10 @@ docker pull ghcr.io/tomazb/imageset-generator:sha-abc123
 
 ```bash
 # Run all tests
-for test in test_*.py; do python3 "$test"; done
+PYTHONPATH=src pytest tests -q
 
 # Run specific test
-python3 test_validation_simple.py
+PYTHONPATH=src pytest tests/unit/test_validation_simple.py -q
 ```
 
 ### Security Scan Locally
@@ -294,7 +290,7 @@ Add these badges to your README:
 
 1. Check build logs for errors
 2. Test build locally with same commands
-3. Verify Dockerfile/Containerfile syntax
+3. Verify `Containerfile` syntax and image entrypoint behavior
 
 ### Code Quality Failures
 

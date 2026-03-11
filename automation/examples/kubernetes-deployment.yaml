@@ -148,7 +148,7 @@ spec:
         command:
           - python
           - -m
-          - automation.scheduler
+          - imageset_generator.automation.scheduler
           - --config
           - /config/config.yaml
           - --log-level

@@ -195,13 +195,13 @@ kubectl create secret generic redhat-registry-pull-secret \
 Start the scheduler to run automatically:
 
 ```bash
-python -m automation.scheduler --config automation/config.yaml
+python -m imageset_generator.automation.scheduler --config automation/config.yaml
 ```
 
 Or with logging:
 
 ```bash
-python -m automation.scheduler \
+python -m imageset_generator.automation.scheduler \
   --config automation/config.yaml \
   --log-level DEBUG
 ```
@@ -211,7 +211,7 @@ python -m automation.scheduler \
 Execute automation immediately:
 
 ```bash
-python -m automation.scheduler \
+python -m imageset_generator.automation.scheduler \
   --config automation/config.yaml \
   --run-now
 ```
@@ -219,7 +219,7 @@ python -m automation.scheduler \
 Or use the engine directly:
 
 ```bash
-python -m automation.engine \
+python -m imageset_generator.automation.engine \
   --config automation/config.yaml
 ```
 
@@ -228,7 +228,7 @@ python -m automation.engine \
 Test without creating actual Kubernetes jobs. Dry-run works even if the Kubernetes client is unavailable:
 
 ```bash
-python -m automation.engine \
+python -m imageset_generator.automation.engine \
   --config automation/config.yaml \
   --dry-run
 ```
@@ -239,7 +239,7 @@ The automation can run as part of the web application:
 
 ```python
 # In app.py
-from automation.api import automation_bp, init_automation
+from imageset_generator.automation.api import automation_bp, init_automation
 
 # Register blueprint
 app.register_blueprint(automation_bp)
@@ -355,7 +355,7 @@ spec:
         command:
           - python
           - -m
-          - automation.scheduler
+          - imageset_generator.automation.scheduler
           - --config
           - /config/config.yaml
         volumeMounts:
@@ -406,7 +406,7 @@ spec:
             command:
               - python
               - -m
-              - automation.engine
+              - imageset_generator.automation.engine
               - --config
               - /config/config.yaml
             volumeMounts:
@@ -491,7 +491,7 @@ cat data/automation-state.json
 4. Validate execution window logic
 
 ```bash
-python -m automation.scheduler --config automation/config.yaml --log-level DEBUG
+python -m imageset_generator.automation.scheduler --config automation/config.yaml --log-level DEBUG
 ```
 
 ### Version Discovery Fails
@@ -695,7 +695,7 @@ If `max_wait_time` is omitted or set to null, the default timeout is 4 hours.
 Implement custom version selection logic by extending `AutomationEngine`:
 
 ```python
-from automation.engine import AutomationEngine
+from imageset_generator.automation.engine import AutomationEngine
 
 class CustomEngine(AutomationEngine):
     def _select_version(self, releases, strategy, discovery_config):
@@ -708,7 +708,7 @@ class CustomEngine(AutomationEngine):
 Add custom notification channels:
 
 ```python
-from automation.notifier import NotificationManager
+from imageset_generator.automation.notifier import NotificationManager
 
 class CustomNotifier(NotificationManager):
     def _send_notifications(self, subject, message, event_type, data):
@@ -734,8 +734,8 @@ version_discovery:
 Run multiple schedulers:
 
 ```bash
-python -m automation.scheduler --config automation/config-stable.yaml &
-python -m automation.scheduler --config automation/config-fast.yaml &
+python -m imageset_generator.automation.scheduler --config automation/config-stable.yaml &
+python -m imageset_generator.automation.scheduler --config automation/config-fast.yaml &
 ```
 
 ## Contributing

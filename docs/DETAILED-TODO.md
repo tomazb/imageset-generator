@@ -861,7 +861,7 @@ class DataLoader:
    flake8 src/
    
    # Manual smoke test
-   python app.py
+   python -m imageset_generator.app
    # Test API endpoints manually
    ```
 

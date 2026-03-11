@@ -41,7 +41,7 @@ spec:
             command:
               - python
               - -m
-              - automation.engine
+              - imageset_generator.automation.engine
               - --config
               - /config/config.yaml
               - --log-level
@@ -123,7 +123,7 @@ spec:
             command:
               - python
               - -m
-              - automation.engine
+              - imageset_generator.automation.engine
               - --config
               - /config/config.yaml
               - --log-level

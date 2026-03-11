@@ -68,7 +68,7 @@ podman run -it --rm \
   -v "$(pwd):/app:Z" \
   -e FLASK_ENV=development \
   imageset-generator:latest \
-  python app.py --host 0.0.0.0 --port 5000 --debug
+  python -m imageset_generator.app --host 0.0.0.0 --port 5000 --debug
 ```
 
 ## Container Management
