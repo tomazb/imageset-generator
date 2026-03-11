@@ -23,26 +23,27 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint flake8 black isort mypy
+        pip install -e .
 
     - name: Run Black (code formatting check)
       run: |
-        black --check --diff *.py || true
+        black --check --diff src tests || true
 
     - name: Run isort (import sorting check)
       run: |
-        isort --check-only --diff *.py || true
+        isort --check-only --diff src tests || true
 
     - name: Run Flake8 (style guide enforcement)
       run: |
-        flake8 --max-line-length=120 --extend-ignore=E203,W503 *.py || true
+        flake8 --max-line-length=120 --extend-ignore=E203,W503 src tests || true
 
     - name: Run Pylint (code analysis)
       run: |
-        pylint --max-line-length=120 --disable=C0111,R0913,R0914 *.py || true
+        pylint --max-line-length=120 --disable=C0111,R0913,R0914 src/imageset_generator || true
 
     - name: Run MyPy (type checking)
       run: |
-        mypy --ignore-missing-imports *.py || true
+        mypy --ignore-missing-imports src/imageset_generator || true
 
   complexity:
     name: Code Complexity Check
@@ -62,11 +63,11 @@ jobs:
 
     - name: Check cyclomatic complexity
       run: |
-        radon cc *.py -a -s
+        radon cc src/imageset_generator -a -s
 
     - name: Check maintainability index
       run: |
-        radon mi *.py -s
+        radon mi src/imageset_generator -s
 
   docs:
     name: Documentation Check
@@ -79,13 +80,13 @@ jobs:
       run: |
         test -f README.md && echo "✅ README.md exists"
         test -f CHANGELOG.md && echo "✅ CHANGELOG.md exists"
-        test -f CODE-SMELL-ANALYSIS-RESOLUTION.md && echo "✅ CODE-SMELL-ANALYSIS-RESOLUTION.md exists"
+        test -f docs/review/CODE-SMELL-ANALYSIS-RESOLUTION.md && echo "✅ CODE-SMELL-ANALYSIS-RESOLUTION.md exists"
 
     - name: Check Python docstrings
       run: |
-        python3 -c "import validation; print('✅ validation.py imports successfully')"
-        python3 -c "import constants; print('✅ constants.py imports successfully')"
-        python3 -c "import exceptions; print('✅ exceptions.py imports successfully')"
+        python3 -c "from imageset_generator import validation; print('✅ validation imports successfully')"
+        python3 -c "from imageset_generator import constants; print('✅ constants import successfully')"
+        python3 -c "from imageset_generator import exceptions; print('✅ exceptions import successfully')"
 
     - name: Install markdown linter
       run: |

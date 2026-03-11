@@ -25,21 +25,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -e .
 
-    - name: Run validation tests
-      run: python3 test_validation_simple.py
-
-    - name: Run constants tests
-      run: python3 test_constants.py
-
-    - name: Run TLS config tests
-      run: python3 test_tls_config.py
-
-    - name: Run refactoring tests
-      run: python3 test_refactoring.py
-
-    - name: Run exception tests
-      run: python3 test_exceptions.py
+    - name: Run pytest suite
+      run: pytest tests -q
 
     - name: Report test summary
       if: always()
@@ -48,11 +37,7 @@ jobs:
         if [ "${{ job.status }}" == "success" ]; then
           echo "✅ **All tests passed successfully!**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Validation tests" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Constants tests" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ TLS config tests" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Refactoring tests" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Exception tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Pytest suite" >> $GITHUB_STEP_SUMMARY
         else
           echo "❌ **Some tests failed. Please review the logs above.**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

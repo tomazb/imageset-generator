@@ -51,7 +51,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile
+        file: ./Containerfile
         push: false
         load: true
         tags: ${{ steps.meta.outputs.tags }}
@@ -87,7 +87,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile
+        file: ./Containerfile
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
@@ -115,11 +115,6 @@ jobs:
         podman images
         podman inspect imageset-generator:test
 
-    - name: Build with Podman (Dockerfile)
+    - name: Verify package imports in container
       run: |
-        podman build -f Dockerfile -t imageset-generator:test-docker .
-
-    - name: Test Podman image
-      run: |
-        podman images
-        podman inspect imageset-generator:test-docker
+        podman run --rm imageset-generator:test python3.11 -c "import imageset_generator.app"
