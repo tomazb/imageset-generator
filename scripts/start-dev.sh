@@ -54,7 +54,9 @@ trap cleanup EXIT
 
 # Start backend in background
 echo "Starting Flask backend..."
-python app.py --host 127.0.0.1 --port 5000 --debug &
+export PYTHONPATH="$(pwd)/src${PYTHONPATH:+:$PYTHONPATH}"
+export IMAGESET_GENERATOR_ROOT="${IMAGESET_GENERATOR_ROOT:-$(pwd)}"
+python -m imageset_generator.app --host 127.0.0.1 --port 5000 --debug &
 BACKEND_PID=$!
 
 # Wait a moment for backend to start

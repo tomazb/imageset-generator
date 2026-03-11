@@ -6,6 +6,15 @@ Centralized configuration constants for timeouts, ports, patterns, and defaults.
 """
 
 import os
+from pathlib import Path
+
+
+def _resolve_project_root() -> Path:
+    """Resolve the project root, allowing runtime overrides outside the repo."""
+    env_root = os.environ.get("IMAGESET_GENERATOR_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    return Path(__file__).resolve().parents[2]
 
 # Network Timeouts (seconds)
 TIMEOUT_OC_MIRROR_SHORT = 30      # For list operations
@@ -17,6 +26,7 @@ TIMEOUT_CATALOG_DISCOVERY = 300   # For catalog discovery
 # Server Configuration
 DEFAULT_PORT = 5000
 DEBUG_MODE = os.environ.get('DEBUG_MODE', 'False').lower() == 'true'
+PROJECT_ROOT = _resolve_project_root()
 
 # Version Patterns
 VERSION_PATTERN = r'^\d+\.\d+$'                    # X.Y format
@@ -78,7 +88,7 @@ OPERATOR_MAPPINGS = {
 
 # File Paths
 DATA_DIR = "data"
-FRONTEND_BUILD_DIR = "frontend/build"
+FRONTEND_BUILD_DIR = str(PROJECT_ROOT / "frontend" / "build")
 
 # Cache File Names
 CACHE_OCP_VERSIONS = "ocp-versions.json"

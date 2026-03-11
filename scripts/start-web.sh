@@ -51,6 +51,8 @@ cd ..
 FLASK_ENV=${FLASK_ENV:-production}
 FLASK_HOST=${FLASK_HOST:-127.0.0.1}
 FLASK_PORT=${FLASK_PORT:-5000}
+export PYTHONPATH="$(pwd)/src${PYTHONPATH:+:$PYTHONPATH}"
+export IMAGESET_GENERATOR_ROOT="${IMAGESET_GENERATOR_ROOT:-$(pwd)}"
 
 if [ "$FLASK_ENV" = "development" ]; then
     echo "Starting Flask development server..."
@@ -59,12 +61,12 @@ if [ "$FLASK_ENV" = "development" ]; then
     echo "In another terminal, run:"
     echo "  cd frontend && npm start"
     echo ""
-    python app.py --host $FLASK_HOST --port $FLASK_PORT --debug
+    python -m imageset_generator.app --host $FLASK_HOST --port $FLASK_PORT --debug
 else
     echo "Starting Flask production server..."
     echo "Frontend and backend will be served together"
     echo ""
     echo "Access the application at: http://$FLASK_HOST:$FLASK_PORT"
     echo ""
-    python app.py --host $FLASK_HOST --port $FLASK_PORT
+    python -m imageset_generator.app --host $FLASK_HOST --port $FLASK_PORT
 fi

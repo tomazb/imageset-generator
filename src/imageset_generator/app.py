@@ -8,7 +8,8 @@ It serves as the backend for the React frontend application.
 
 import json
 import re
-from flask import Flask, request, jsonify, send_from_directory
+from pathlib import Path
+from flask import Flask, request, jsonify, send_from_directory, abort
 from packaging.version import Version as Version_Checker
 from flask_cors import CORS
 import yaml
@@ -18,7 +19,14 @@ import tempfile
 from datetime import datetime
 from .generator import ImageSetGenerator
 import traceback
-from .constants import TLS_VERIFY, TIMEOUT_OPM_RENDER
+from .constants import (
+    BASE_CATALOGS,
+    FRONTEND_BUILD_DIR,
+    PROJECT_ROOT,
+    TIMEOUT_OC_MIRROR_MEDIUM,
+    TIMEOUT_OPM_RENDER,
+    TLS_VERIFY,
+)
 from .validation import validate_version, validate_channel, safe_path_component, ValidationError
 from .exceptions import (
     ImageSetGeneratorError,
@@ -109,18 +117,18 @@ def prepare_operator_entry(op_data):
         
     return entry
 
-app = Flask(__name__, static_folder='frontend/build')
+app = Flask(__name__, static_folder=FRONTEND_BUILD_DIR)
 CORS(app)  # Enable CORS for all routes
 
 # Initialize automation (optional - only if config exists)
 try:
-    from automation.api import automation_bp, init_automation
+    from .automation.api import automation_bp, init_automation
 
     # Register automation blueprint
     app.register_blueprint(automation_bp)
 
     # Initialize and start automation scheduler
-    automation_config_path = 'automation/config.yaml'
+    automation_config_path = str(PROJECT_ROOT / 'automation' / 'config.yaml')
     if os.path.exists(automation_config_path):
         scheduler = init_automation(automation_config_path)
         if scheduler:
@@ -135,42 +143,24 @@ except Exception:
     app.logger.exception("Failed to initialize automation")
 
 def return_base_catalog_info(catalog_url):
-    base_catalogs = [
-            {
-                "name": "Red Hat Operators",
-                "base_url": "registry.redhat.io/redhat/redhat-operator-index",
-                "description": "Official Red Hat certified operators",
-                "default": True
-            },
-            {
-                "name": "Community Operators",
-                "base_url": "registry.redhat.io/redhat/community-operator-index",
-                "description": "Community-maintained operators",
-                "default": False
-            },
-            {
-                "name": "Certified Operators", 
-                "base_url": "registry.redhat.io/redhat/certified-operator-index",
-                "description": "Third-party certified operators",
-                "default": False
-            },
-            {
-                "name": "Red Hat Marketplace",
-                "base_url": "registry.redhat.io/redhat/redhat-marketplace-index",
-                "description": "Commercial operators from Red Hat Marketplace",
-                "default": False
-            }
-        ]
-    
-    for catalog in base_catalogs:
+    for catalog in BASE_CATALOGS:
         if catalog_url.startswith(catalog['base_url']):
-            return {
-                "name": catalog['name'],
-                "base_url": catalog['base_url'],
-                "description": catalog['description'],
-                "default": catalog['default']
-            }
+            return dict(catalog)
     return None
+
+
+def _frontend_build_exists():
+    """Return True when the compiled frontend is available to serve."""
+    return Path(app.static_folder, "index.html").exists()
+
+
+def _not_found_response():
+    """Return a consistent JSON 404 payload."""
+    return jsonify({
+        'status': 'error',
+        'message': 'Resource not found',
+        'timestamp': datetime.now().isoformat()
+    }), 404
 
 def get_operators_from_opm(catalog_url, version_key):
     """Get operators from a catalog using opm render"""
@@ -263,15 +253,22 @@ def load_catalogs_from_file(version_key):
 @app.route('/<path:path>')
 def serve_react_app(path):
     """Serve React app"""
-    # Don't interfere with static files or API routes
-    if path.startswith('static/') or path.startswith('api/'):
-        return app.send_static_file(path) if path.startswith('static/') else None
-    
-    # For all other paths, check if the file exists in static folder
+    if path.startswith('api/'):
+        abort(404)
+
+    if path.startswith('static/'):
+        static_path = Path(app.static_folder, path)
+        if static_path.exists():
+            return send_from_directory(app.static_folder, path)
+        abort(404)
+
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
-    else:
+
+    if _frontend_build_exists():
         return send_from_directory(app.static_folder, 'index.html')
+
+    abort(404)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -1195,68 +1192,58 @@ def get_operator_catalogs(version):
 @app.route('/api/operators/catalogs', methods=['GET'])
 def get_available_catalogs():
     """Get all available operator catalogs using oc-mirror"""
-    return None
     try:
-        import subprocess
-        import json
-        
-        # Define standard catalog URLs to check
-        standard_catalogs = [
-            {
-                "name": "Red Hat Operators",
-                "url": "registry.redhat.io/redhat/redhat-operator-index",
-                "description": "Official Red Hat certified operators"
-            },
-            {
-                "name": "Community Operators", 
-                "url": "registry.redhat.io/redhat/community-operator-index",
-                "description": "Community-maintained operators"
-            },
-            {
-                "name": "Certified Operators",
-                "url": "registry.redhat.io/redhat/certified-operator-index", 
-                "description": "Third-party certified operators"
-            },
-            {
-                "name": "Red Hat Marketplace",
-                "url": "registry.redhat.io/redhat/redhat-marketplace-index",
-                "description": "Commercial operators from Red Hat Marketplace"
-            }
-        ]
-        
         validated_catalogs = []
-        
-        # Try to validate each catalog with oc-mirror
-        for catalog in standard_catalogs:
+
+        for catalog in BASE_CATALOGS:
             try:
-                # Test if oc-mirror can access this catalog
-                cmd = ['oc-mirror', 'list', 'operators', '--catalogs', catalog['url']]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-                
-                catalog_info = catalog.copy()
+                cmd = ['oc-mirror', 'list', 'operators', '--catalogs', catalog['base_url']]
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=TIMEOUT_OC_MIRROR_MEDIUM,
+                )
+
+                catalog_info = {
+                    'name': catalog['name'],
+                    'url': catalog['base_url'],
+                    'description': catalog['description'],
+                    'default': catalog['default'],
+                }
                 if result.returncode == 0:
                     catalog_info['validated'] = True
-                    app.logger.info(f"Validated catalog: {catalog['url']}")
+                    app.logger.info(f"Validated catalog: {catalog['base_url']}")
                 else:
                     catalog_info['validated'] = False
-                    app.logger.warning(f"Could not validate catalog: {catalog['url']}")
-                
+                    app.logger.warning(f"Could not validate catalog: {catalog['base_url']}")
+
                 validated_catalogs.append(catalog_info)
-                
+
             except subprocess.TimeoutExpired:
-                catalog_info = catalog.copy()
+                catalog_info = {
+                    'name': catalog['name'],
+                    'url': catalog['base_url'],
+                    'description': catalog['description'],
+                    'default': catalog['default'],
+                }
                 catalog_info['validated'] = False
                 catalog_info['error'] = 'Timeout while validating'
                 validated_catalogs.append(catalog_info)
-                app.logger.warning(f"Timeout validating catalog: {catalog['url']}")
-                
+                app.logger.warning(f"Timeout validating catalog: {catalog['base_url']}")
+
             except Exception as e:
-                catalog_info = catalog.copy()
+                catalog_info = {
+                    'name': catalog['name'],
+                    'url': catalog['base_url'],
+                    'description': catalog['description'],
+                    'default': catalog['default'],
+                }
                 catalog_info['validated'] = False
                 catalog_info['error'] = str(e)
                 validated_catalogs.append(catalog_info)
-                app.logger.warning(f"Error validating catalog {catalog['url']}: {e}")
-        
+                app.logger.warning(f"Error validating catalog {catalog['base_url']}: {e}")
+
         return jsonify({
             'status': 'success',
             'catalogs': validated_catalogs,
@@ -1860,7 +1847,13 @@ def refresh_all_static_data():
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors by serving React app"""
-    return send_from_directory(app.static_folder, 'index.html')
+    if request.path.startswith('/api/') or request.path.startswith('/static/'):
+        return _not_found_response()
+
+    if _frontend_build_exists():
+        return send_from_directory(app.static_folder, 'index.html')
+
+    return _not_found_response()
 
 
 @app.errorhandler(500)
@@ -1917,4 +1910,3 @@ if __name__ == '__main__':
     print(f"Access the application at: http://{args.host}:{args.port}")
     
     app.run(host=args.host, port=args.port, debug=args.debug)
-

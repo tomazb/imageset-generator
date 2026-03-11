@@ -15,4 +15,6 @@ echo ""
 echo "Starting OpenShift ImageSetConfiguration Generator Web API..."
 
 # Start the Flask application using the new package structure
+export PYTHONPATH="/app/src${PYTHONPATH:+:$PYTHONPATH}"
+export IMAGESET_GENERATOR_ROOT="${IMAGESET_GENERATOR_ROOT:-/app}"
 exec python3.11 -m imageset_generator.app --host 0.0.0.0 --port 5000

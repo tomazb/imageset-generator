@@ -47,5 +47,7 @@ podman run -it --rm \
     -v "$(pwd):/app:Z" \
     -v /app/frontend/node_modules \
     -e FLASK_ENV=development \
+    -e PYTHONPATH=/app/src \
+    -e IMAGESET_GENERATOR_ROOT=/app \
     imageset-generator:dev \
-    python app.py --host 0.0.0.0 --port 5000 --debug
+    python -m imageset_generator.app --host 0.0.0.0 --port 5000 --debug
