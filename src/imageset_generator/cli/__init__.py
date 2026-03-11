@@ -5,6 +5,13 @@ Provides command-line interface and GUI for the ImageSet Generator.
 """
 
 from .launcher import main
-from .gui import ImageSetGeneratorGUI
 
 __all__ = ["main", "ImageSetGeneratorGUI"]
+
+
+def __getattr__(name):
+    if name == "ImageSetGeneratorGUI":
+        from .gui import ImageSetGeneratorGUI
+
+        return ImageSetGeneratorGUI
+    raise AttributeError(name)

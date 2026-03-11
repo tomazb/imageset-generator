@@ -8,13 +8,42 @@ of the ImageSetConfiguration generator.
 
 import sys
 import argparse
-import tkinter as tk
-from tkinter import messagebox
+from pathlib import Path
+
+
+def _load_gui_main():
+    """Import GUI entry point for package and direct-script execution."""
+    if __package__:
+        from .gui import main as gui_main
+        return gui_main
+
+    package_root = Path(__file__).resolve().parents[2]
+    if str(package_root) not in sys.path:
+        sys.path.insert(0, str(package_root))
+
+    from imageset_generator.cli.gui import main as gui_main
+    return gui_main
+
+
+def _load_cli_main():
+    """Import CLI entry point for package and direct-script execution."""
+    if __package__:
+        from ..generator import main as cli_main
+        return cli_main
+
+    package_root = Path(__file__).resolve().parents[2]
+    if str(package_root) not in sys.path:
+        sys.path.insert(0, str(package_root))
+
+    from imageset_generator.generator import main as cli_main
+    return cli_main
 
 
 def check_gui_available():
     """Check if GUI is available (tkinter is working)"""
     try:
+        import tkinter as tk
+
         # Try to create a root window
         root = tk.Tk()
         root.withdraw()  # Hide the window
@@ -55,8 +84,10 @@ def main():
     if args.help:
         parser.print_help()
         print("\n" + "="*60)
-        print("For CLI options, use: python launcher.py --cli --help")
-        print("For GUI mode, use: python launcher.py --gui")
+        print("For CLI options, use: imageset-generator --cli --help")
+        print("For module mode, use: python -m imageset_generator.cli.launcher --cli --help")
+        print("For direct script mode, use: python launcher.py --cli --help")
+        print("For GUI mode, use: imageset-generator --gui")
         print("="*60)
         return
     
@@ -85,8 +116,7 @@ def main():
     if use_gui:
         print("Launching GUI...")
         try:
-            from .gui import main as gui_main
-            gui_main()
+            _load_gui_main()()
         except ImportError as e:
             print(f"Error: Cannot import GUI module: {e}")
             print("Falling back to CLI mode...")
@@ -98,10 +128,9 @@ def main():
     if not use_gui:
         # Launch CLI version
         try:
-            from ..generator import main as cli_main
             # Restore original sys.argv for generator.py
             sys.argv = [sys.argv[0]] + remaining_args
-            cli_main()
+            _load_cli_main()()
         except ImportError as e:
             print(f"Error: Cannot import generator module: {e}")
             sys.exit(1)
