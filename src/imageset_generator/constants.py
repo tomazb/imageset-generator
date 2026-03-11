@@ -9,12 +9,81 @@ import os
 from pathlib import Path
 
 
-def _resolve_project_root() -> Path:
-    """Resolve the project root, allowing runtime overrides outside the repo."""
+PACKAGE_ROOT = Path(__file__).resolve().parent
+
+
+def _looks_like_repo_root(path: Path) -> bool:
+    """Return True when the given path looks like a repo checkout root."""
+    return (
+        (path / "pyproject.toml").exists()
+        and (path / "src" / "imageset_generator").is_dir()
+    )
+
+
+def _resolve_project_root() -> Path | None:
+    """Resolve a checkout root when available, allowing runtime overrides."""
     env_root = os.environ.get("IMAGESET_GENERATOR_ROOT")
     if env_root:
         return Path(env_root).expanduser().resolve()
-    return Path(__file__).resolve().parents[2]
+
+    candidate = PACKAGE_ROOT.parents[1]
+    if _looks_like_repo_root(candidate):
+        return candidate
+
+    return None
+
+
+def _resolve_runtime_root(project_root: Path | None) -> Path:
+    """Resolve the writable runtime root."""
+    if project_root is not None:
+        return project_root
+    return Path.cwd().resolve()
+
+
+def _prefer_existing(*paths: Path) -> Path:
+    """Return the first existing path, or the final fallback."""
+    for path in paths:
+        if path.exists():
+            return path
+    return paths[-1]
+
+
+_CHECKOUT_ROOT = _resolve_project_root()
+RUNTIME_ROOT = _resolve_runtime_root(_CHECKOUT_ROOT)
+PROJECT_ROOT = _CHECKOUT_ROOT or PACKAGE_ROOT
+
+PACKAGED_DATA_DIR = PACKAGE_ROOT / "data"
+PACKAGED_FRONTEND_BUILD_DIR = PACKAGE_ROOT / "frontend" / "build"
+PACKAGED_AUTOMATION_CONFIG_PATH = PACKAGE_ROOT / "automation" / "config.yaml"
+RUNTIME_DATA_DIR = RUNTIME_ROOT / "data"
+AUTOMATION_CONFIG_PATH = _prefer_existing(
+    PROJECT_ROOT / "automation" / "config.yaml",
+    PACKAGED_AUTOMATION_CONFIG_PATH,
+)
+
+
+def get_packaged_data_path(filename: str) -> Path:
+    """Return the packaged read-only data file path."""
+    return PACKAGED_DATA_DIR / filename
+
+
+def get_runtime_data_path(filename: str) -> Path:
+    """Return the writable runtime data file path."""
+    return RUNTIME_DATA_DIR / filename
+
+
+def get_data_read_path(filename: str) -> Path:
+    """Prefer the writable cache, then packaged seed data."""
+    runtime_path = get_runtime_data_path(filename)
+    if runtime_path.exists():
+        return runtime_path
+    return get_packaged_data_path(filename)
+
+
+def get_data_write_path(filename: str) -> Path:
+    """Return a writable cache file path, creating the directory if needed."""
+    RUNTIME_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return get_runtime_data_path(filename)
 
 # Network Timeouts (seconds)
 TIMEOUT_OC_MIRROR_SHORT = 30      # For list operations
@@ -26,7 +95,6 @@ TIMEOUT_CATALOG_DISCOVERY = 300   # For catalog discovery
 # Server Configuration
 DEFAULT_PORT = 5000
 DEBUG_MODE = os.environ.get('DEBUG_MODE', 'False').lower() == 'true'
-PROJECT_ROOT = _resolve_project_root()
 
 # Version Patterns
 VERSION_PATTERN = r'^\d+\.\d+$'                    # X.Y format
@@ -88,7 +156,12 @@ OPERATOR_MAPPINGS = {
 
 # File Paths
 DATA_DIR = "data"
-FRONTEND_BUILD_DIR = str(PROJECT_ROOT / "frontend" / "build")
+FRONTEND_BUILD_DIR = str(
+    _prefer_existing(
+        PROJECT_ROOT / "frontend" / "build",
+        PACKAGED_FRONTEND_BUILD_DIR,
+    )
+)
 
 # Cache File Names
 CACHE_OCP_VERSIONS = "ocp-versions.json"

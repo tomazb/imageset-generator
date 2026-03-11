@@ -1,12 +1,57 @@
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 from imageset_generator.app import app
-from imageset_generator.constants import BASE_CATALOGS
+from imageset_generator.constants import BASE_CATALOGS, PACKAGE_ROOT
 
 
-def test_static_folder_points_to_repo_frontend_build():
-    expected = Path(__file__).resolve().parents[2] / "frontend" / "build"
+def test_static_folder_points_to_packaged_frontend_build():
+    expected = PACKAGE_ROOT / "frontend" / "build"
     assert Path(app.static_folder) == expected
+
+
+def test_ocp_versions_endpoint_uses_packaged_seed_data_outside_repo_root(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    app.testing = True
+    client = app.test_client()
+
+    response = client.get("/api/ocp-versions")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    packaged_payload = json.loads((PACKAGE_ROOT / "data" / "ocp-versions.json").read_text())
+    assert payload["status"] == "success"
+    assert payload["releases"] == packaged_payload["releases"]
+
+
+def test_checkout_mode_resolves_project_root_to_repo_root():
+    project_root = Path(__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(project_root / "src")
+    env.pop("IMAGESET_GENERATOR_ROOT", None)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from imageset_generator.constants import PROJECT_ROOT, RUNTIME_ROOT; "
+                "print(PROJECT_ROOT); print(RUNTIME_ROOT)"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=project_root,
+    )
+
+    assert result.returncode == 0, result.stderr
+    roots = result.stdout.strip().splitlines()
+    assert roots == [str(project_root), str(project_root)]
 
 
 def test_unknown_api_route_returns_404():

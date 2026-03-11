@@ -7,18 +7,20 @@ Tests smaller, focused functions extracted from large monolithic function
 import sys
 import os
 import tempfile
+from pathlib import Path
 
 
 def test_get_operator_file_paths():
     """Test file path generation"""
     from imageset_generator.app import _get_operator_file_paths
+    from imageset_generator.constants import get_data_write_path
     
     main, index, data, channel = _get_operator_file_paths("redhat-operator-index", "v4.18")
     
-    assert main == "data/operators-redhat-operator-index-v4.18.json"
-    assert index == "data/operators-redhat-operator-index-v4.18-index.json"
-    assert data == "data/operators-redhat-operator-index-v4.18-data.json"
-    assert channel == "data/operators-redhat-operator-index-v4.18-channel.json"
+    assert Path(main) == get_data_write_path("operators-redhat-operator-index-v4.18.json")
+    assert Path(index) == get_data_write_path("operators-redhat-operator-index-v4.18-index.json")
+    assert Path(data) == get_data_write_path("operators-redhat-operator-index-v4.18-data.json")
+    assert Path(channel) == get_data_write_path("operators-redhat-operator-index-v4.18-channel.json")
     
     print("✓ Test passed: File path generation works correctly")
 
