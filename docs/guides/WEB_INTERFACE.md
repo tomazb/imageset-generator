@@ -51,7 +51,7 @@ npm install
 npm start
 
 # For production build
-npm run build
+BUILD_PATH=../src/imageset_generator/frontend/build npm run build
 ```
 
 ## Features
@@ -182,7 +182,7 @@ frontend/
 
 4. **Build for production**:
    ```bash
-   cd frontend && npm run build
+   cd frontend && BUILD_PATH=../src/imageset_generator/frontend/build npm run build
    ```
 
 ### Adding New Features
@@ -204,7 +204,7 @@ frontend/
 ### Traditional Server
 ```bash
 # Build frontend
-cd frontend && npm run build && cd ..
+cd frontend && BUILD_PATH=../src/imageset_generator/frontend/build npm run build && cd ..
 
 # Start production server
 python -m imageset_generator.app --host 0.0.0.0 --port 5000
@@ -282,7 +282,7 @@ server {
    cd frontend
    rm -rf node_modules package-lock.json
    npm install
-   npm run build
+   BUILD_PATH=../src/imageset_generator/frontend/build npm run build
    ```
 
 ### Debug Mode

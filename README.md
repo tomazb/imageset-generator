@@ -6,7 +6,7 @@
 [![Code Quality](https://github.com/tomazb/imageset-generator/actions/workflows/quality.yml/badge.svg)](https://github.com/tomazb/imageset-generator/actions/workflows/quality.yml)
 
 This tool generates ImageSetConfiguration files for OpenShift disconnected installations using the oc-mirror tool. It takes OCP versions and operator suggestions as input and creates a YAML configuration that can be used to mirror container images and operators for air-gapped environments.  
-The data used by the tool is stored in the data subfolder.To have it refreshed run rm -rf ./data/*.
+Bundled seed data ships inside the Python package, while refreshed cache files are written to `./data/`. To clear the writable cache, run `rm -rf ./data/*`.
 
 ## Features
 
@@ -78,10 +78,8 @@ The data used by the tool is stored in the data subfolder.To have it refreshed r
 
 ### Data Storage
 
-- **`data/`** - Cached operator and catalog information
-  - Operator indexes per catalog and version
-  - OCP version and channel data
-  - Auto-refreshed on first access
+- **`src/imageset_generator/data/`** - Bundled read-only seed data shipped with the package
+- **`data/`** - Writable runtime cache for refreshed operator and catalog information
 
 ## Security Features
 

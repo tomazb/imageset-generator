@@ -88,7 +88,7 @@ pip install -r automation/requirements.txt
 
 ### 2. Configure Automation
 
-Edit `automation/config.yaml`:
+Edit `src/imageset_generator/automation/config.yaml`:
 
 ```yaml
 scheduler:
@@ -195,14 +195,14 @@ kubectl create secret generic redhat-registry-pull-secret \
 Start the scheduler to run automatically:
 
 ```bash
-python -m imageset_generator.automation.scheduler --config automation/config.yaml
+python -m imageset_generator.automation.scheduler --config src/imageset_generator/automation/config.yaml
 ```
 
 Or with logging:
 
 ```bash
 python -m imageset_generator.automation.scheduler \
-  --config automation/config.yaml \
+  --config src/imageset_generator/automation/config.yaml \
   --log-level DEBUG
 ```
 
@@ -212,7 +212,7 @@ Execute automation immediately:
 
 ```bash
 python -m imageset_generator.automation.scheduler \
-  --config automation/config.yaml \
+  --config src/imageset_generator/automation/config.yaml \
   --run-now
 ```
 
@@ -220,7 +220,7 @@ Or use the engine directly:
 
 ```bash
 python -m imageset_generator.automation.engine \
-  --config automation/config.yaml
+  --config src/imageset_generator/automation/config.yaml
 ```
 
 ### Dry Run Mode
@@ -229,7 +229,7 @@ Test without creating actual Kubernetes jobs. Dry-run works even if the Kubernet
 
 ```bash
 python -m imageset_generator.automation.engine \
-  --config automation/config.yaml \
+  --config src/imageset_generator/automation/config.yaml \
   --dry-run
 ```
 
@@ -245,7 +245,7 @@ from imageset_generator.automation.api import automation_bp, init_automation
 app.register_blueprint(automation_bp)
 
 # Initialize automation
-init_automation('automation/config.yaml')
+init_automation('src/imageset_generator/automation/config.yaml')
 ```
 
 ### API Endpoints
@@ -491,7 +491,7 @@ cat data/automation-state.json
 4. Validate execution window logic
 
 ```bash
-python -m imageset_generator.automation.scheduler --config automation/config.yaml --log-level DEBUG
+python -m imageset_generator.automation.scheduler --config src/imageset_generator/automation/config.yaml --log-level DEBUG
 ```
 
 ### Version Discovery Fails
@@ -757,4 +757,4 @@ Same as main ImageSet Generator project.
 For issues and questions:
 - GitHub Issues: [imageset-generator/issues](https://github.com/yourusername/imageset-generator/issues)
 - Documentation: This README and inline code comments
-- Examples: See `automation/config.yaml` for complete configuration example
+- Examples: See `src/imageset_generator/automation/config.yaml` for complete configuration example

@@ -21,7 +21,7 @@ python -c "import apscheduler, kubernetes; print('✓ Dependencies installed')"
 
 ## Step 2: Configure Automation (5 minutes)
 
-Edit `automation/config.yaml`:
+Edit `src/imageset_generator/automation/config.yaml`:
 
 ```yaml
 scheduler:
@@ -148,7 +148,7 @@ curl -X POST http://localhost:5000/api/automation/trigger
 ### Change Schedule
 
 ```yaml
-# In automation/config.yaml
+# In src/imageset_generator/automation/config.yaml
 scheduler:
   execution_window: "second-to-last-week"  # Run earlier in month
   day_of_week: 3  # Wednesday instead of Tuesday
@@ -288,7 +288,7 @@ which oc-mirror
 ## Next Steps
 
 1. **Review Full Documentation**: See `automation/README.md` for comprehensive guide
-2. **Customize Configuration**: Adjust `automation/config.yaml` to your needs
+2. **Customize Configuration**: Adjust `src/imageset_generator/automation/config.yaml` to your needs
 3. **Set Up Monitoring**: Configure Prometheus/Grafana for job metrics
 4. **Test Notifications**: Verify all notification channels work
 5. **Plan Maintenance**: Schedule regular cleanup of old jobs
@@ -296,7 +296,7 @@ which oc-mirror
 ## Support
 
 - Full Documentation: `automation/README.md`
-- Configuration Reference: `automation/config.yaml` (inline comments)
+- Configuration Reference: `src/imageset_generator/automation/config.yaml` (inline comments)
 - Examples: `automation/examples/` directory
 - GitHub Issues: Report problems and request features
 
