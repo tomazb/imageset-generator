@@ -18,8 +18,20 @@ dependencies = [
     "kubernetes>=28.1.0",
 ]
 
+[project.scripts]
+imageset-generator = "imageset_generator.cli.launcher:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+imageset_generator = [
+    "frontend/build/*",
+    "frontend/build/**/*",
+    "data/*.json",
+    "automation/config.yaml",
+]

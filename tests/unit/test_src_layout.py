@@ -13,6 +13,10 @@ def test_static_folder_points_to_packaged_frontend_build():
     assert Path(app.static_folder) == expected
 
 
+def test_packaged_frontend_build_contains_static_assets():
+    assert (PACKAGE_ROOT / "frontend" / "build" / "static").is_dir()
+
+
 def test_ocp_versions_endpoint_uses_packaged_seed_data_outside_repo_root(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 

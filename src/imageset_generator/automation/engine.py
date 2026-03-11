@@ -18,6 +18,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 import subprocess
+from ..constants import AUTOMATION_CONFIG_PATH
 from ..generator import ImageSetGenerator
 from .notifier import NotificationManager
 from .k8s_manager import KubernetesManager, DEFAULT_MONITOR_MAX_WAIT_TIME
@@ -565,7 +566,7 @@ def main():
     parser = argparse.ArgumentParser(description='ImageSet Generator Automation')
     parser.add_argument(
         '--config',
-        default='automation/config.yaml',
+        default=str(AUTOMATION_CONFIG_PATH),
         help='Path to configuration file'
     )
     parser.add_argument(

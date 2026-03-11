@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..constants import AUTOMATION_CONFIG_PATH
+
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
@@ -299,7 +301,7 @@ def main():
     parser = argparse.ArgumentParser(description='ImageSet Automation Scheduler')
     parser.add_argument(
         '--config',
-        default='automation/config.yaml',
+        default=str(AUTOMATION_CONFIG_PATH),
         help='Path to configuration file'
     )
     parser.add_argument(

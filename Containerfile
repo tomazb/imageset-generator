@@ -13,7 +13,8 @@ RUN npm install --legacy-peer-deps
 COPY frontend/ ./
 
 # Build the application
-RUN npm run build
+RUN mkdir -p /app/src/imageset_generator/frontend \
+    && BUILD_PATH=../src/imageset_generator/frontend/build npm run build
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal
 
@@ -50,14 +51,13 @@ RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 # Create data directory
 RUN mkdir -p /app/data
 
-# Copy application code and data
+# Copy application code and support files
 COPY src/ ./src/
-COPY data/ ./data/
 COPY automation/ ./automation/
 COPY scripts/ ./scripts/
 
 # Copy built frontend from builder stage
-COPY --from=frontend-builder /app/frontend/build ./frontend/build
+COPY --from=frontend-builder /app/src/imageset_generator/frontend/build ./src/imageset_generator/frontend/build
 
 # Install the application package
 RUN python3.11 -m pip install --no-cache-dir .

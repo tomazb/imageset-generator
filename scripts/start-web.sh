@@ -44,7 +44,7 @@ fi
 # Build frontend for production
 echo "Building React frontend..."
 cd frontend
-npm run build
+BUILD_PATH=../src/imageset_generator/frontend/build npm run build
 cd ..
 
 # Check if Flask app should run in development mode

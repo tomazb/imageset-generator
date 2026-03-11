@@ -1,0 +1,3 @@
+recursive-include src/imageset_generator/frontend/build *
+recursive-include src/imageset_generator/data *.json
+include src/imageset_generator/automation/config.yaml

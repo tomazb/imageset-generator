@@ -503,7 +503,7 @@ def create_notifier(config_path: Optional[str] = None) -> NotificationManager:
     Create notification manager from configuration file
 
     Args:
-        config_path: Path to configuration file (default: automation/config.yaml)
+        config_path: Path to configuration file (default: packaged automation config)
 
     Returns:
         NotificationManager instance

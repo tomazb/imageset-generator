@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Dict, Any
 from flask import Blueprint, jsonify, request
 
+from ..constants import AUTOMATION_CONFIG_PATH
 from .scheduler import AutomationScheduler
 from .engine import AutomationEngine, load_config
 
@@ -23,7 +24,7 @@ _scheduler = None
 _config = None
 
 
-def init_automation(config_path: str = 'automation/config.yaml'):
+def init_automation(config_path: str = str(AUTOMATION_CONFIG_PATH)):
     """
     Initialize automation components
 
@@ -143,7 +144,7 @@ def update_config():
         # In production, this should save to file and restart scheduler
         return jsonify({
             "message": "Configuration update not implemented in this version",
-            "note": "Please update automation/config.yaml manually and restart"
+            "note": "Please update src/imageset_generator/automation/config.yaml manually and restart"
         }), 501
 
     except Exception as e:

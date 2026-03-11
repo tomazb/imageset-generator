@@ -20,12 +20,14 @@ from datetime import datetime
 from .generator import ImageSetGenerator
 import traceback
 from .constants import (
+    AUTOMATION_CONFIG_PATH,
     BASE_CATALOGS,
     FRONTEND_BUILD_DIR,
-    PROJECT_ROOT,
     TIMEOUT_OC_MIRROR_MEDIUM,
     TIMEOUT_OPM_RENDER,
     TLS_VERIFY,
+    get_data_read_path,
+    get_data_write_path,
 )
 from .validation import validate_version, validate_channel, safe_path_component, ValidationError
 from .exceptions import (
@@ -128,7 +130,7 @@ try:
     app.register_blueprint(automation_bp)
 
     # Initialize and start automation scheduler
-    automation_config_path = str(PROJECT_ROOT / 'automation' / 'config.yaml')
+    automation_config_path = str(AUTOMATION_CONFIG_PATH)
     if os.path.exists(automation_config_path):
         scheduler = init_automation(automation_config_path)
         if scheduler:
@@ -161,6 +163,16 @@ def _not_found_response():
         'message': 'Resource not found',
         'timestamp': datetime.now().isoformat()
     }), 404
+
+
+def _data_read_file(filename: str) -> Path:
+    """Return the cache file to read, preferring runtime overrides."""
+    return get_data_read_path(filename)
+
+
+def _data_write_file(filename: str) -> Path:
+    """Return the cache file to write, creating the runtime cache dir."""
+    return get_data_write_path(filename)
 
 def get_operators_from_opm(catalog_url, version_key):
     """Get operators from a catalog using opm render"""
@@ -213,12 +225,11 @@ def get_cached_operators(cache_file):
 def load_operators_from_file(catalog_key, version_key):
     """Load operators from cached JSON files"""
     try:
-
         # Try to load from cache file first
-        catalog_index= (catalog_key.split('/')[-1]).split(':')[0]
-        static_file_path = os.path.join("data", f"operators-{catalog_index}-{version_key}.json")
+        catalog_index = (catalog_key.split('/')[-1]).split(':')[0]
+        static_file_path = _data_read_file(f"operators-{catalog_index}-{version_key}.json")
 
-        if os.path.exists(static_file_path):
+        if static_file_path.exists():
             with open(static_file_path, 'r') as f:
                 data = json.load(f)
                 return data.get('operators', None)
@@ -234,9 +245,9 @@ def load_catalogs_from_file(version_key):
 
     try:
         filename = f'catalogs-{version_key}.json'
-        filepath = os.path.join('data', filename)
-        
-        if os.path.exists(filepath):
+        filepath = _data_read_file(filename)
+
+        if filepath.exists():
             with open(filepath, 'r') as f:
                 catalogs = json.load(f)
                 return catalogs
@@ -285,7 +296,7 @@ def refresh_versions():
     # Logic to refresh the releases (e.g., by re-running oc-mirror)
     app.logger.debug("Refreshing OCP releases...")
     releases = []
-    static_file_path = os.path.join("data", "ocp-versions.json")
+    static_file_path = _data_write_file("ocp-versions.json")
     
     try:
         # Run oc-mirror to get the latest releases
@@ -352,10 +363,10 @@ def _get_operator_file_paths(catalog_index, version):
     """
     base_name = f"operators-{catalog_index}-{version}"
     return (
-        os.path.join("data", f"{base_name}.json"),
-        os.path.join("data", f"{base_name}-index.json"),
-        os.path.join("data", f"{base_name}-data.json"),
-        os.path.join("data", f"{base_name}-channel.json")
+        str(_data_write_file(f"{base_name}.json")),
+        str(_data_write_file(f"{base_name}-index.json")),
+        str(_data_write_file(f"{base_name}-data.json")),
+        str(_data_write_file(f"{base_name}-channel.json")),
     )
 
 def _render_catalog_index(catalog, output_path):
@@ -609,7 +620,7 @@ def refresh_ocp_releases(version=None, channel=None):
         }), 400
         
     channels_releases = {}
-    static_file_path = os.path.join("data", "channel-releases.json")
+    static_file_path = _data_write_file("channel-releases.json")
     try:
         # Run oc-mirror to get the latest releases for the specified version and channel
         app.logger.debug(f"Running oc-mirror to refresh releases for version {version} and channel {channel}...")
@@ -648,7 +659,7 @@ def refresh_ocp_releases(version=None, channel=None):
         # Try to load from static file first
         old_channels_releases = {}
         try:
-            if os.path.exists(static_file_path):
+            if static_file_path.exists():
                 with open(static_file_path, 'r') as f:
                     data = json.load(f)
                 old_channels_releases = data.get("channel_releases", {})
@@ -690,7 +701,7 @@ def refresh_ocp_channels(version=None):
     app.logger.debug("Refreshing OCP channels...")
     channels = {}
     
-    static_file_path = os.path.join("data", "ocp-channels.json")
+    static_file_path = _data_write_file("ocp-channels.json")
     version_list = []
     # Use Version if provided, or get available versions if not provided
     if version:
@@ -700,8 +711,8 @@ def refresh_ocp_channels(version=None):
         app.logger.debug("Fetching channels for all available versions")
         try:
         # Try to load from static file first
-            static_file_path = os.path.join("data", "ocp-versions.json")
-            if os.path.exists(static_file_path):
+            static_file_path = _data_read_file("ocp-versions.json")
+            if static_file_path.exists():
                 with open(static_file_path, 'r') as f:
                     data = json.load(f)
                     releases = data.get("releases", [])
@@ -749,7 +760,7 @@ def refresh_ocp_channels(version=None):
         # Try to load from static file first
         old_channels = {}
         try:
-            if os.path.exists(static_file_path):
+            if static_file_path.exists():
                 with open(static_file_path, 'r') as f:
                     data = json.load(f)
                 old_channels = data.get("channels", {})
@@ -798,8 +809,8 @@ def refresh_catalogs_for_version(version=None):
             version_list.append(version)
         else:
             # If no version provided, refresh for all available versions
-            static_file_path = os.path.join("data", "ocp-versions.json")
-            if os.path.exists(static_file_path):
+            static_file_path = _data_read_file("ocp-versions.json")
+            if static_file_path.exists():
                 with open(static_file_path, 'r') as f:
                     data = json.load(f)
                     releases = data.get("releases", [])
@@ -885,7 +896,7 @@ def refresh_catalogs_for_version(version=None):
 
     # Write Catalog info to File
     try:
-        with open(f"data/catalogs-{version}.json", 'w') as f:
+        with open(_data_write_file(f"catalogs-{version}.json"), 'w') as f:
             json.dump(discovered_catalogs, f, indent=2)
     except Exception as e:
         app.logger.warning(f"Could not save catalog file: {e}")
@@ -907,8 +918,8 @@ def get_versions():
   
     try:
         # Try to load from static file first
-        static_file_path = os.path.join("data", "ocp-versions.json")
-        if os.path.exists(static_file_path):
+        static_file_path = _data_read_file("ocp-versions.json")
+        if static_file_path.exists():
             with open(static_file_path, 'r') as f:
                 data = json.load(f)
                 releases = data.get("releases", [])
@@ -987,7 +998,7 @@ def get_ocp_releases(version, channel):
         
     # Try to load from static file first
     app.logger.debug(f"Checking static file for releases for version {version} and channel {channel}")
-    static_file_path = os.path.join("data", "channel-releases.json")
+    static_file_path = _data_read_file("channel-releases.json")
 
     try:
         with open(static_file_path, 'r') as f:
@@ -1051,11 +1062,11 @@ def get_ocp_channels(version):
             'timestamp': datetime.now().isoformat()
         }), 400
         
-    static_file_path = os.path.join("data", f"ocp-channels.json")
+    static_file_path = _data_read_file("ocp-channels.json")
           
     # Try to load from static file first
     try:
-        if os.path.exists(static_file_path):
+        if static_file_path.exists():
             with open(static_file_path, 'r') as f:
                 data = json.load(f)
             channels = data.get("channels", [])
@@ -1143,10 +1154,10 @@ def get_operator_catalogs(version):
     else:
         version_key = version
 
-    static_file = os.path.join('data', f'catalogs-{version_key}.json')
+    static_file = _data_read_file(f'catalogs-{version_key}.json')
 
     # Try to load from static file first
-    if os.path.exists(static_file):
+    if static_file.exists():
         try:
             with open(static_file, 'r') as f:
                 catalogs = json.load(f)
@@ -1491,7 +1502,7 @@ def generate_preview():
                 version_key = data.get('ocp_versions', [None])[0]
                 catalog_name = op_data.get('catalog', "")
                 catalog_index = (catalog_name.split('/')[-1]).split(':')[0]
-                static_file_path = os.path.join("data", f"operators-{catalog_index}-{version_key}.json")
+                static_file_path = _data_read_file(f"operators-{catalog_index}-{version_key}.json")
                 temp_channel_version_map = {}
                 
                 #Open static_file_path and get all available versions of operator between the selected min and max values
@@ -1869,8 +1880,8 @@ def internal_error(error):
 def get_ocp_versions_static():
     """Get OCP versions from static file"""
     try:
-        static_file_path = os.path.join("data", "ocp-versions.json")
-        if os.path.exists(static_file_path):
+        static_file_path = _data_read_file("ocp-versions.json")
+        if static_file_path.exists():
             with open(static_file_path, "r") as f:
                 data = json.load(f)
                 return jsonify({
