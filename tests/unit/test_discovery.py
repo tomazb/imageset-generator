@@ -114,6 +114,25 @@ class TestDiscoverChannelReleases:
         assert result == ["4.16.0", "4.16.1", "4.16.2"]
 
     @patch("imageset_generator.discovery._query_cincinnati")
+    def test_returns_sorted_prerelease_versions(self, mock_query):
+        mock_query.return_value = {
+            "nodes": _make_nodes([
+                "4.18.0-rc.10", "4.18.0-rc.2", "4.18.0-ec.0",
+                "4.18.0", "4.18.0-rc.1",
+            ])
+        }
+
+        result = discover_channel_releases("candidate-4.18")
+
+        assert result == [
+            "4.18.0-ec.0",
+            "4.18.0-rc.1",
+            "4.18.0-rc.2",
+            "4.18.0-rc.10",
+            "4.18.0",
+        ]
+
+    @patch("imageset_generator.discovery._query_cincinnati")
     def test_returns_empty_on_failure(self, mock_query):
         mock_query.return_value = None
 

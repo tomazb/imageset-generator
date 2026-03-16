@@ -101,7 +101,13 @@ def _version_sort_key(version: str) -> tuple:
         except ValueError:
             parts.append(segment)
     if prerelease:
-        return (*parts, 0, prerelease)
+        pre_parts = []
+        for seg in prerelease.split("."):
+            try:
+                pre_parts.append((0, int(seg)))
+            except ValueError:
+                pre_parts.append((1, seg))
+        return (*parts, 0, *pre_parts)
     return (*parts, 1)
 
 
