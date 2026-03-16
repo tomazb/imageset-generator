@@ -76,6 +76,7 @@ def test_api(base_url="http://localhost:5000"):
 
         print("\n" + "=" * 50)
         print("✓ All API tests passed!")
+        return True
 
     except requests.exceptions.ConnectionError:
         pytest.skip(f"API server not running at {base_url}")
