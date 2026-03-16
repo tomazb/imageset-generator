@@ -20,6 +20,15 @@ def test_packaged_frontend_build_contains_static_assets():
 def test_ocp_versions_endpoint_uses_packaged_seed_data_outside_repo_root(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
+    # Force the read path to the packaged seed data so the runtime cache
+    # (which differs in a checkout) is bypassed — this simulates running
+    # from an installed wheel where no repo-level data/ directory exists.
+    from imageset_generator.constants import get_packaged_data_path
+    monkeypatch.setattr(
+        "imageset_generator.app._data_read_file",
+        get_packaged_data_path,
+    )
+
     app.testing = True
     client = app.test_client()
 

@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -7,22 +8,19 @@ import zipfile
 def test_wheel_includes_runtime_assets(tmp_path):
     project_root = Path(__file__).resolve().parents[2]
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "wheel",
-            str(project_root),
-            "--no-deps",
-            "--no-build-isolation",
-            "--wheel-dir",
-            str(tmp_path),
-        ],
-        capture_output=True,
-        text=True,
-        cwd=project_root,
-    )
+    uv = shutil.which("uv")
+    if uv:
+        result = subprocess.run(
+            [uv, "build", "--wheel", "--out-dir", str(tmp_path)],
+            capture_output=True, text=True, cwd=project_root,
+        )
+    else:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "wheel", str(project_root),
+             "--no-deps", "--no-build-isolation",
+             "--wheel-dir", str(tmp_path)],
+            capture_output=True, text=True, cwd=project_root,
+        )
 
     assert result.returncode == 0, result.stderr
 
