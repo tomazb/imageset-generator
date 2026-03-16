@@ -15,7 +15,7 @@ The project uses GitHub Actions for automated testing, security scanning, code q
 
 **Jobs:**
 - Tests on Python 3.10, 3.11, 3.12, and 3.13
-- Installs the project in editable mode
+- Installs dependencies from `requirements.txt`, then installs the project in editable mode with `--no-build-isolation --no-deps`
 - Runs `pytest tests -q` against the `tests/` tree
 - Covers unit and smoke tests under the `src/` package layout
 
@@ -104,6 +104,7 @@ ghcr.io/tomazb/imageset-generator:v1.0.0
 - **Flake8** - Style guide enforcement (PEP 8)
 - **Pylint** - Code analysis
 - **MyPy** - Static type checking
+- Installs runtime dependencies before the editable project install, then uses `--no-build-isolation --no-deps -e .`
 
 #### Complexity Check
 - **Radon** - Cyclomatic complexity analysis

@@ -59,8 +59,8 @@ COPY scripts/ ./scripts/
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/src/imageset_generator/frontend/build ./src/imageset_generator/frontend/build
 
-# Install the application package
-RUN python3.11 -m pip install --no-cache-dir .
+# Install the application package without isolated build dependency downloads
+RUN python3.11 -m pip install --no-cache-dir --no-build-isolation --no-deps .
 
 ENV PYTHONPATH=/app/src
 ENV IMAGESET_GENERATOR_ROOT=/app
