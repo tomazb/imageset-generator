@@ -327,6 +327,7 @@ def refresh_versions():
                 "source": "cincinnati",
                 "timestamp": datetime.now().isoformat()
             }, f, indent=2)
+            f.write("\n")
 
     except Exception as e:
         app.logger.error(f"Error refreshing releases: {e}")
@@ -549,6 +550,7 @@ def _refresh_operators_data(catalog, version):
             "source": "opm",
             "timestamp": datetime.now().isoformat()
         }, f, indent=2)
+        f.write("\n")
 
     # Step 6: Cleanup intermediate files
     _cleanup_intermediate_files(index_path, data_path, channel_path)
@@ -654,6 +656,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 "source": "cincinnati",
                 "timestamp": datetime.now().isoformat()
             }, f, indent=2)
+            f.write("\n")
 
     except Exception as e:
         app.logger.error(f"Error refreshing releases: {e}")
@@ -738,6 +741,7 @@ def refresh_ocp_channels(version=None):
                 "source": "cincinnati",
                 "timestamp": datetime.now().isoformat()
             }, f, indent=2)
+            f.write("\n")
 
     except Exception as e:
         app.logger.error(f"Error refreshing channels: {e}")
@@ -836,6 +840,7 @@ def refresh_catalogs_for_version(version=None):
     try:
         with open(_data_write_file(f"catalogs-{version}.json"), 'w') as f:
             json.dump(discovered_catalogs, f, indent=2)
+            f.write("\n")
     except Exception as e:
         app.logger.warning(f"Could not save catalog file: {e}")
 
