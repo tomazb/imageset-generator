@@ -91,6 +91,20 @@ def discover_channels_for_version(version: str, arch: str = "amd64") -> list[str
     return channels
 
 
+def _version_sort_key(version: str) -> tuple:
+    """Parse a version string into a sort key, handling prerelease tags like 4.18.0-rc.0."""
+    base, _, prerelease = version.partition("-")
+    parts = []
+    for segment in base.split("."):
+        try:
+            parts.append(int(segment))
+        except ValueError:
+            parts.append(segment)
+    if prerelease:
+        return (*parts, 0, prerelease)
+    return (*parts, 1)
+
+
 def discover_channel_releases(channel: str, arch: str = "amd64") -> list[str]:
     """
     Get all release versions available in a Cincinnati channel.
@@ -101,7 +115,7 @@ def discover_channel_releases(channel: str, arch: str = "amd64") -> list[str]:
     if not data or not data.get("nodes"):
         return []
     releases = [node["version"] for node in data["nodes"] if "version" in node]
-    releases.sort(key=lambda v: tuple(int(p) for p in v.split(".")))
+    releases.sort(key=lambda v: _version_sort_key(v))
     return releases
 
 
