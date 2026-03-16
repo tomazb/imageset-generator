@@ -1268,7 +1268,7 @@ def get_operators_list():
 
 @app.route('/api/operators/<operator_name>/channels', methods=['GET'])
 def get_operator_channels(operator_name):
-    """Get available channels for a specific operator using opm render"""
+    """Get available channels for a specific operator using cached data or opm render"""
     try:
         # Get parameters from query string
         catalog = request.args.get('catalog', 'registry.redhat.io/redhat/redhat-operator-index')
@@ -1289,9 +1289,38 @@ def get_operator_channels(operator_name):
         else:
             catalog_url = catalog
 
+        # Try loading from cached operator data first
+        operators = load_operators_from_file(catalog, version_key)
+        if operators:
+            channels = []
+            for op in operators:
+                if op.get("package") == operator_name or op.get("name") == operator_name:
+                    ch = op.get("channel")
+                    if ch and ch not in [c['name'] for c in channels]:
+                        channels.append({"name": ch, "default": False})
+            if channels:
+                # Mark "stable" as default if present, otherwise first channel
+                default_channel = "stable"
+                has_stable = any(c['name'] == 'stable' for c in channels)
+                if not has_stable:
+                    default_channel = channels[0]['name']
+                for c in channels:
+                    c['default'] = c['name'] == default_channel
+
+                app.logger.info(f"Returning {len(channels)} cached channels for operator {operator_name}")
+                return jsonify({
+                    'status': 'success',
+                    'operator': operator_name,
+                    'catalog': catalog_url,
+                    'channels': channels,
+                    'default_channel': default_channel,
+                    'source': 'cache',
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+
+        # Fall back to opm render
         app.logger.info(f"Fetching channels for operator {operator_name} from {catalog_url} via opm render")
 
-        # Use opm render to get operator channel information
         cmd = build_opm_command(catalog_url, output_format='json')
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_OPM_RENDER)
 
@@ -1300,7 +1329,6 @@ def get_operator_channels(operator_name):
 
         if result.returncode != 0:
             app.logger.warning(f"opm render failed for operator channels: {result.stderr}")
-            # Return default channel structure if command fails
             return jsonify({
                 'status': 'success',
                 'operator': operator_name,
