@@ -787,11 +787,24 @@ def refresh_catalogs_for_version(version=None):
                 if version_key not in discovered_catalogs:
                     discovered_catalogs[version_key] = []
                 for catalog in BASE_CATALOGS:
+                    catalog_url = f"{catalog['base_url']}:v{version_key}"
+                    # Validate catalog image exists with skopeo
+                    validated = False
+                    try:
+                        result = subprocess.run(
+                            ['skopeo', 'inspect', '--no-tags', f'docker://{catalog_url}'],
+                            capture_output=True, text=True, timeout=TIMEOUT_SKOPEO,
+                        )
+                        validated = result.returncode == 0
+                    except (subprocess.TimeoutExpired, Exception):
+                        app.logger.warning(f"Could not validate catalog {catalog_url}")
+
                     discovered_catalogs[version_key].append({
                         'name': catalog['name'],
-                        'url': f"{catalog['base_url']}:v{version_key}",
+                        'url': catalog_url,
                         'description': catalog['description'],
-                        'default': catalog['default']
+                        'default': catalog['default'],
+                        'validated': validated,
                     })
             except Exception as e:
                 app.logger.error(f"Error generating catalogs for version {version_key}: {e}")
@@ -1380,6 +1393,7 @@ def get_operator_channels(operator_name):
             'catalog': catalog_url,
             'channels': channels,
             'default_channel': default_channel,
+            'source': 'opm_render',
             'timestamp': datetime.utcnow().isoformat()
         })
 
