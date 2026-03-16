@@ -78,23 +78,15 @@ def test_operators_list_cache_miss_returns_refreshed_operators(
     mock_load, client
 ):
     """When cached operators file is empty, /api/operators/list should call
-    refresh and return the operator list as JSON — not a serialization error."""
+    _refresh_operators_data and return the operator list as JSON."""
     expected_operators = [
         {"name": "elasticsearch-operator", "channels": ["stable"]},
         {"name": "cluster-logging", "channels": ["stable-5.8"]},
     ]
     mock_load.return_value = None
 
-    # Mock refresh_ocp_operators at the route level — it's a Flask view that
-    # returns a Response, which is what triggers the serialization bug when
-    # get_operators_list tries to jsonify the Response object.
-    with patch("imageset_generator.app.refresh_ocp_operators") as mock_refresh:
-        from flask import jsonify as _jsonify
-        with app.test_request_context():
-            mock_refresh.return_value = _jsonify({
-                "status": "success",
-                "data": expected_operators,
-            })
+    with patch("imageset_generator.app._refresh_operators_data") as mock_refresh:
+        mock_refresh.return_value = expected_operators
 
         response = client.get(
             "/api/operators/list"

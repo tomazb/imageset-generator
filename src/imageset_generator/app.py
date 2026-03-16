@@ -515,19 +515,12 @@ def _cleanup_intermediate_files(*file_paths):
         except Exception as e:
             app.logger.error(f"Error removing {path}: {e}")
 
-@app.route('/api/operators/refresh', methods=['POST'])
-def refresh_ocp_operators(catalog=None, version=None):
-    """Refresh the list of available OCP operators"""
-    app.logger.debug("Refreshing OCP operators...")
-    
-    # Validate required parameters
-    if catalog is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Catalog parameter is required',
-            'timestamp': datetime.now().isoformat()
-        }), 400
+def _refresh_operators_data(catalog, version):
+    """Refresh operators from catalog via opm and return the operator list.
 
+    Returns a list of operator dicts on success.
+    Raises on failure (callers decide how to surface the error).
+    """
     # Extract version from catalog if not provided
     if version is None or not version.strip():
         version = catalog.split(':')[-1]
@@ -536,37 +529,53 @@ def refresh_ocp_operators(catalog=None, version=None):
     catalog_index = (catalog.split('/')[-1]).split(':')[0]
     main_path, index_path, data_path, channel_path = _get_operator_file_paths(catalog_index, version)
 
+    # Step 1: Render catalog index
+    _render_catalog_index(catalog, index_path)
+
+    # Step 2: Extract operator data
+    _extract_operator_data(index_path, data_path)
+
+    # Step 3: Extract channel data
+    _extract_channel_data(index_path, channel_path)
+
+    # Step 4: Parse and combine data
+    operators = _parse_operator_data(data_path, channel_path)
+
+    # Step 5: Write final output
+    with open(main_path, "w") as f:
+        json.dump({
+            "operators": operators,
+            "count": len(operators),
+            "source": "opm",
+            "timestamp": datetime.now().isoformat()
+        }, f, indent=2)
+
+    # Step 6: Cleanup intermediate files
+    _cleanup_intermediate_files(index_path, data_path, channel_path)
+
+    return operators
+
+
+@app.route('/api/operators/refresh', methods=['POST'])
+def refresh_ocp_operators(catalog=None, version=None):
+    """Refresh the list of available OCP operators"""
+    app.logger.debug("Refreshing OCP operators...")
+
+    # Validate required parameters
+    if catalog is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Catalog parameter is required',
+            'timestamp': datetime.now().isoformat()
+        }), 400
+
     try:
-        # Step 1: Render catalog index
-        _render_catalog_index(catalog, index_path)
-        
-        # Step 2: Extract operator data
-        _extract_operator_data(index_path, data_path)
-        
-        # Step 3: Extract channel data
-        _extract_channel_data(index_path, channel_path)
-        
-        # Step 4: Parse and combine data
-        operators = _parse_operator_data(data_path, channel_path)
-        
-        # Step 5: Write final output
-        with open(main_path, "w") as f:
-            json.dump({
-                "operators": operators,
-                "count": len(operators),
-                "source": "opm",
-                "timestamp": datetime.now().isoformat()
-            }, f, indent=2)
-        
-        # Step 6: Cleanup intermediate files
-        _cleanup_intermediate_files(index_path, data_path, channel_path)
-        
+        operators = _refresh_operators_data(catalog, version)
         return jsonify({
             'status': 'success',
             'data': operators,
             'timestamp': datetime.now().isoformat()
         })
-        
     except subprocess.CalledProcessError as e:
         app.logger.error(f"Error processing catalog: {e}")
         return jsonify({
@@ -1284,15 +1293,7 @@ def get_operators_list():
 
         if operators is None or operators == []:
             app.logger.info(f"No cached operators found for {catalog}:{version_key}, running refresh...")
-            #Run Refresh on File
-            refresh_response = refresh_ocp_operators(catalog=catalog, version=version_key)
-            # refresh_ocp_operators is a Flask route handler that returns a
-            # Response object — extract the operator list from its JSON payload.
-            refresh_data = refresh_response.get_json()
-            if refresh_data and refresh_data.get("status") == "success":
-                operators = refresh_data.get("data", [])
-            else:
-                operators = []
+            operators = _refresh_operators_data(catalog, version_key)
 
         # Return the operators list
         return jsonify({
