@@ -991,8 +991,29 @@ def get_ocp_channels(version):
             'timestamp': datetime.now().isoformat()
         }), 400
         
+    def _sort_channels(channel_list, selected_version):
+        """Sort channels: selected version first, then ascending by version.
+        Within each version: stable > fast > eus > candidate."""
+        type_order = {"stable": 0, "fast": 1, "eus": 2, "candidate": 3}
+
+        def sort_key(ch):
+            # Split "stable-4.20" into ("stable", "4.20")
+            parts = ch.rsplit("-", 1)
+            ch_type = parts[0] if len(parts) == 2 else ch
+            ch_ver = parts[1] if len(parts) == 2 else ""
+            # Selected version sorts first (0), others sort second (1)
+            ver_group = 0 if ch_ver == selected_version else 1
+            # Parse version for numeric sorting
+            try:
+                ver_tuple = tuple(int(x) for x in ch_ver.split("."))
+            except (ValueError, AttributeError):
+                ver_tuple = (999,)
+            return (ver_group, ver_tuple, type_order.get(ch_type, 99))
+
+        return sorted(channel_list, key=sort_key)
+
     static_file_path = _data_read_file("ocp-channels.json")
-          
+
     # Try to load from static file first
     try:
         if static_file_path.exists():
@@ -1004,13 +1025,13 @@ def get_ocp_channels(version):
                 return jsonify({
                     'status': 'success',
                     'version': version,
-                    'channels': channel_data,
+                    'channels': _sort_channels(channel_data, version),
                     'source': 'static_file',
                     'timestamp': datetime.utcnow().isoformat()
                 })
     except Exception as e:
         app.logger.warning(f"Could not load static OCP versions file: {e}")
-                 
+
     # If static file does not exist, refresh via Cincinnati API
     try:
         channel_data = refresh_ocp_channels(version)
@@ -1020,7 +1041,7 @@ def get_ocp_channels(version):
                 return jsonify({
                     'status': 'success',
                     'version': version,
-                    'channels': channels[version],
+                    'channels': _sort_channels(channels[version], version),
                     'source': 'cincinnati',
                     'timestamp': datetime.utcnow().isoformat()
                 })
@@ -1263,7 +1284,14 @@ def get_operators_list():
         if operators is None or operators == []:
             app.logger.info(f"No cached operators found for {catalog}:{version_key}, running refresh...")
             #Run Refresh on File
-            operators=refresh_ocp_operators(catalog=catalog, version=version_key)
+            refresh_response = refresh_ocp_operators(catalog=catalog, version=version_key)
+            # refresh_ocp_operators is a Flask route handler that returns a
+            # Response object — extract the operator list from its JSON payload.
+            refresh_data = refresh_response.get_json()
+            if refresh_data and refresh_data.get("status") == "success":
+                operators = refresh_data.get("data", [])
+            else:
+                operators = []
 
         # Return the operators list
         return jsonify({
@@ -1558,14 +1586,6 @@ def generate_preview():
                 generator.set_archive_size(int(data['archive_size']))
             except Exception:
                 pass
-        # Add storageConfig if present
-        if data.get('storageConfig'):
-            storage_config = {'registry': {}}
-            if data['storageConfig'].get('registry'):
-                storage_config['registry']['imageURL'] = data['storageConfig']['registry']
-            if data['storageConfig'].get('skipTLS') is not None:
-                storage_config['registry']['skipTLS'] = data['storageConfig']['skipTLS']
-            generator.config['storageConfig'] = storage_config
         # Generate YAML
         yaml_content = generator.generate_yaml()
         return jsonify({
@@ -1688,14 +1708,6 @@ def generate_download():
                 generator.set_archive_size(int(data['archive_size']))
             except Exception:
                 pass
-        # Add storageConfig if present
-        if data.get('storageConfig'):
-            storage_config = {'registry': {}}
-            if data['storageConfig'].get('registry'):
-                storage_config['registry']['imageURL'] = data['storageConfig']['registry']
-            if data['storageConfig'].get('skipTLS') is not None:
-                storage_config['registry']['skipTLS'] = data['storageConfig']['skipTLS']
-            generator.config['storageConfig'] = storage_config
         # Generate YAML
         yaml_content = generator.generate_yaml()
         # Create temporary file

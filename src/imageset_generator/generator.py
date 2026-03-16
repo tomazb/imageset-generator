@@ -264,9 +264,6 @@ class ImageSetGenerator:
                         comment_lines.append(f"# {k}.{subk}: {subv}")
                 else:
                     comment_lines.append(f"# {k}: {v}")
-        # Add storageConfig if present
-        if 'storageConfig' in config_copy and config_copy['storageConfig'] is None:
-            del config_copy['storageConfig']
         yaml_body = yaml.dump(config_copy, default_flow_style=False, sort_keys=False)
         return ("\n".join(comment_lines) + "\n" + yaml_body) if comment_lines else yaml_body
     
