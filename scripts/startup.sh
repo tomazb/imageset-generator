@@ -1,13 +1,14 @@
 #!/bin/bash
 
-echo "Fetching OCP releases using oc-mirror..."
-echo "Available OpenShift releases:"
+echo "Checking OCP release connectivity via Cincinnati API..."
 echo "================================"
 
-# Try to fetch releases list with timeout
-timeout 30 oc-mirror list releases 2>/dev/null || {
-    echo "Warning: Could not fetch releases list (network issue or timeout)"
-    echo "The application will continue without the releases list"
+# Connectivity check against Cincinnati API
+timeout 15 curl -sf "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.18&arch=amd64" -H "Accept: application/json" -o /dev/null && {
+    echo "Cincinnati API reachable"
+} || {
+    echo "Warning: Could not reach Cincinnati API (network issue or timeout)"
+    echo "The application will continue without live release data"
 }
 
 echo "================================"
