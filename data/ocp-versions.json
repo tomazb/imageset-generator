@@ -1,0 +1,22 @@
+{
+  "channels": {
+    "4.14": [
+      "candidate-4.16",
+      "fast-4.16",
+      "stable-4.16"
+    ],
+    "4.15": [
+      "candidate-4.16",
+      "fast-4.16",
+      "stable-4.16"
+    ],
+    "4.16": [
+      "candidate-4.16",
+      "fast-4.16",
+      "stable-4.16"
+    ]
+  },
+  "count": 3,
+  "source": "cincinnati",
+  "timestamp": "2026-03-16T16:15:05.952815"
+}

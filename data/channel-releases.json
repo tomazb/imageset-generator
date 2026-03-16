@@ -1,0 +1,12 @@
+{
+  "channel_releases": {
+    "stable-4.16": [
+      "4.16.0",
+      "4.16.1",
+      "4.16.2"
+    ]
+  },
+  "count": 1,
+  "source": "cincinnati",
+  "timestamp": "2026-03-16T16:15:05.950646"
+}
