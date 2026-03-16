@@ -970,17 +970,39 @@ def get_ocp_releases(version, channel):
             'timestamp': datetime.now().isoformat()
         }), 500
 
+def _sort_channels(channel_list, selected_version):
+    """Sort channels: selected version first, then ascending by version.
+    Within each version: stable > fast > eus > candidate."""
+    type_order = {"stable": 0, "fast": 1, "eus": 2, "candidate": 3}
+
+    def sort_key(ch):
+        # Split "stable-4.20" into ("stable", "4.20")
+        parts = ch.rsplit("-", 1)
+        ch_type = parts[0] if len(parts) == 2 else ch
+        ch_ver = parts[1] if len(parts) == 2 else ""
+        # Selected version sorts first (0), others sort second (1)
+        ver_group = 0 if ch_ver == selected_version else 1
+        # Parse version for numeric sorting
+        try:
+            ver_tuple = tuple(int(x) for x in ch_ver.split("."))
+        except (ValueError, AttributeError):
+            ver_tuple = (999,)
+        return (ver_group, ver_tuple, type_order.get(ch_type, 99))
+
+    return sorted(channel_list, key=sort_key)
+
+
 @app.route("/api/channels/<version>", methods=["GET"])
 def get_ocp_channels(version):
     """Get available OCP channels for a specific version"""
-    
+
     if version is None:
         return jsonify({
             'status': 'error',
             'message': 'Version parameter is required',
             'timestamp': datetime.now().isoformat()
         }), 400
-        
+
     # Validate version format using centralized validation
     try:
         version = validate_version(version)
@@ -990,27 +1012,6 @@ def get_ocp_channels(version):
             'message': str(e),
             'timestamp': datetime.now().isoformat()
         }), 400
-        
-    def _sort_channels(channel_list, selected_version):
-        """Sort channels: selected version first, then ascending by version.
-        Within each version: stable > fast > eus > candidate."""
-        type_order = {"stable": 0, "fast": 1, "eus": 2, "candidate": 3}
-
-        def sort_key(ch):
-            # Split "stable-4.20" into ("stable", "4.20")
-            parts = ch.rsplit("-", 1)
-            ch_type = parts[0] if len(parts) == 2 else ch
-            ch_ver = parts[1] if len(parts) == 2 else ""
-            # Selected version sorts first (0), others sort second (1)
-            ver_group = 0 if ch_ver == selected_version else 1
-            # Parse version for numeric sorting
-            try:
-                ver_tuple = tuple(int(x) for x in ch_ver.split("."))
-            except (ValueError, AttributeError):
-                ver_tuple = (999,)
-            return (ver_group, ver_tuple, type_order.get(ch_type, 99))
-
-        return sorted(channel_list, key=sort_key)
 
     static_file_path = _data_read_file("ocp-channels.json")
 
