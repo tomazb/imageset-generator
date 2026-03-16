@@ -17,7 +17,6 @@ import time
 import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
-import subprocess
 from ..constants import AUTOMATION_CONFIG_PATH
 from ..generator import ImageSetGenerator
 from .notifier import NotificationManager
@@ -299,73 +298,29 @@ class AutomationEngine:
             return None
 
     def _get_latest_ocp_version(self) -> Optional[str]:
-        """Get the latest available OCP major.minor version"""
+        """Get the latest available OCP major.minor version via Cincinnati API."""
+        from ..discovery import get_latest_ocp_version
+
         try:
-            result = subprocess.run(
-                ['oc-mirror', 'list', 'releases'],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode != 0:
-                logger.error(f"oc-mirror list releases failed: {result.stderr}")
-                return None
-
-            # Parse output to find versions
-            versions = []
-            for line in result.stdout.split('\n'):
-                line = line.strip()
-                if line and '.' in line and not line.startswith('#'):
-                    # Extract version pattern like "4.16", "4.17", etc.
-                    parts = line.split()
-                    for part in parts:
-                        if part.count('.') == 1:
-                            try:
-                                major, minor = part.split('.')
-                                if major.isdigit() and minor.isdigit():
-                                    versions.append(part)
-                            except ValueError:
-                                continue
-
-            if versions:
-                # Sort and return latest
-                versions.sort(key=self._version_key)
-                latest = versions[-1]
+            latest = get_latest_ocp_version()
+            if latest:
                 logger.info(f"Latest OCP version: {latest}")
-                return latest
-
-            return None
-
+            else:
+                logger.error("Cincinnati API returned no OCP versions")
+            return latest
         except Exception as e:
             logger.exception(f"Failed to get latest OCP version: {e}")
             return None
 
     def _get_channel_releases(self, version: str, channel: str) -> List[str]:
-        """Get available releases in a channel"""
+        """Get available releases in a channel via Cincinnati API."""
+        from ..discovery import discover_channel_releases
+
         try:
-            result = subprocess.run(
-                ['oc-mirror', 'list', 'releases', '--channel', channel, '--version', version],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode != 0:
-                logger.error(f"oc-mirror list releases failed: {result.stderr}")
-                return []
-
-            # Parse releases
-            releases = []
-            for line in result.stdout.split('\n'):
-                line = line.strip()
-                if line and line.startswith(version):
-                    releases.append(line)
-
+            releases = discover_channel_releases(channel)
             releases.sort(key=self._version_key)
             logger.info(f"Found {len(releases)} releases in {channel}")
             return releases
-
         except Exception as e:
             logger.exception(f"Failed to get channel releases: {e}")
             return []
