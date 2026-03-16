@@ -11,6 +11,11 @@ import argparse
 from pathlib import Path
 
 
+def _cli_argv(argv):
+    """Return raw argv with launcher-only flags stripped for generator.py."""
+    return [arg for arg in argv if arg != "--cli"]
+
+
 def _load_gui_main():
     """Import GUI entry point for package and direct-script execution."""
     if __package__:
@@ -55,6 +60,7 @@ def check_gui_available():
 
 def main():
     """Main launcher function"""
+    raw_args = sys.argv[1:]
     parser = argparse.ArgumentParser(
         description="OpenShift ImageSetConfiguration Generator",
         add_help=False  # We'll handle help ourselves
@@ -80,8 +86,13 @@ def main():
     
     # Parse known args to avoid conflicts with generator.py args
     args, remaining_args = parser.parse_known_args()
-    
-    if args.help:
+
+    # Determine which interface to use
+    if args.gui and args.cli:
+        print("Error: Cannot specify both --gui and --cli")
+        sys.exit(1)
+
+    if args.help and not args.cli:
         parser.print_help()
         print("\n" + "="*60)
         print("For CLI options, use: imageset-generator --cli --help")
@@ -90,11 +101,6 @@ def main():
         print("For GUI mode, use: imageset-generator --gui")
         print("="*60)
         return
-    
-    # Determine which interface to use
-    if args.gui and args.cli:
-        print("Error: Cannot specify both --gui and --cli")
-        sys.exit(1)
     
     use_gui = False
     if args.gui:
@@ -128,8 +134,8 @@ def main():
     if not use_gui:
         # Launch CLI version
         try:
-            # Restore original sys.argv for generator.py
-            sys.argv = [sys.argv[0]] + remaining_args
+            # Forward the user's original CLI args, minus launcher-only selectors.
+            sys.argv = [sys.argv[0]] + _cli_argv(raw_args)
             _load_cli_main()()
         except ImportError as e:
             print(f"Error: Cannot import generator module: {e}")
