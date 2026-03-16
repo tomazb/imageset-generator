@@ -3,7 +3,8 @@
 
 # Scheduler Configuration
 scheduler:
-  enabled: true
+  # Disabled by default — operators must explicitly opt-in to automation
+  enabled: false
   # Run in the last or second-to-last week of the month
   # Options: "last-week" (days 22-31), "second-to-last-week" (days 15-21), "both"
   execution_window: "last-week"

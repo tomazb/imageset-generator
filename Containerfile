@@ -27,7 +27,6 @@ RUN microdnf -y install \
     --enablerepo=ubi-9-appstream-rpms \
     python3.11 \
     python3.11-pip \
-    curl \
     gcc \
     tar \
     wget \
@@ -46,7 +45,10 @@ RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest
 
 # Copy Python packaging metadata and install dependencies
 COPY requirements.txt pyproject.toml README.md ./
-RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
+# Install build backend matching pyproject.toml [build-system].requires
+# so the --no-build-isolation install below works in clean environments
+RUN python3.11 -m pip install --no-cache-dir 'setuptools>=68' wheel \
+    && python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 # Create data directory
 RUN mkdir -p /app/data
