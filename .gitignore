@@ -14,12 +14,13 @@ index*.json
 *.temp
 *.log
 
-# Python cache
+# Python cache and build artifacts
 **/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+*.egg-info/
 
 # Node modules and build artifacts
 node_modules/
