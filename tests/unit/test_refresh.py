@@ -1,62 +1,73 @@
 #!/usr/bin/env python3
+"""Tests for Cincinnati-based version/channel refresh."""
 
-import subprocess
 import json
-import re
-import os
-from datetime import datetime
-import shutil
+from unittest.mock import patch, MagicMock
+
 import pytest
 
-def test_oc_mirror():
-    """Test oc-mirror command (skips if oc-mirror is unavailable)."""
-    if shutil.which("oc-mirror") is None:
-        pytest.skip("oc-mirror not installed")
+from imageset_generator.app import app
 
-    try:
-        print("Testing oc-mirror list releases...")
 
-        result = subprocess.run(
-            ["oc-mirror", "list", "releases"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+@pytest.fixture
+def client():
+    app.testing = True
+    return app.test_client()
 
-        print(f"Return code: {result.returncode}")
-        print(f"Stdout: {result.stdout[:500]}...")
-        print(f"Stderr: {result.stderr}")
 
-        if result.returncode != 0:
-            pytest.skip(f"oc-mirror list releases failed: {result.stderr}")
+def _mock_cincinnati_response(versions):
+    """Build a Cincinnati-style response with the given version strings."""
+    return {"nodes": [{"version": v} for v in versions]}
 
-        releases = []
-        lines = result.stdout.strip().split("\n")
 
-        print(f"Processing {len(lines)} lines...")
+@patch("imageset_generator.app.discover_ocp_versions")
+def test_refresh_versions_success(mock_discover, client):
+    mock_discover.return_value = ["4.14", "4.15", "4.16"]
 
-        for line in lines:
-            line = line.strip()
-            if line and re.match(r"^\d+\.\d+$", line):
-                releases.append(line)
-                print(f"Found release: {line}")
+    response = client.post("/api/versions/refresh")
 
-        print(f"Total releases found: {len(releases)}")
-        print(f"Releases: {releases}")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert payload["releases"] == ["4.14", "4.15", "4.16"]
+    assert payload["source"] == "cincinnati"
 
-        # Basic assertions to ensure output is plausible
-        assert isinstance(releases, list)
-        for rel in releases:
-            assert re.match(r"^\d+\.\d+$", rel)
 
-    except subprocess.TimeoutExpired:
-        pytest.skip("oc-mirror timed out")
-    except FileNotFoundError:
-        pytest.skip("oc-mirror binary not found")
-    except Exception as e:
-        pytest.fail(f"Unexpected error: {e}")
+@patch("imageset_generator.app.discover_ocp_versions")
+def test_refresh_versions_empty(mock_discover, client):
+    mock_discover.return_value = []
 
-if __name__ == "__main__":
-    result = test_oc_mirror()
-    print("\nFinal result:")
-    print(json.dumps(result, indent=2))
+    response = client.post("/api/versions/refresh")
+
+    assert response.status_code == 500
+    payload = response.get_json()
+    assert payload["status"] == "error"
+
+
+@patch("imageset_generator.app.discover_channel_releases")
+def test_refresh_releases_success(mock_releases, client):
+    """Test refresh_ocp_releases called internally (version/channel are function kwargs)."""
+    mock_releases.return_value = ["4.16.0", "4.16.1", "4.16.2"]
+
+    from imageset_generator.app import refresh_ocp_releases
+
+    with app.test_request_context():
+        response = refresh_ocp_releases(version="4.16", channel="stable-4.16")
+
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert "stable-4.16" in payload["channel_releases"]
+    assert payload["source"] == "cincinnati"
+
+
+@patch("imageset_generator.app.discover_channels_for_version")
+def test_refresh_channels_success(mock_channels, client, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    mock_channels.return_value = ["candidate-4.16", "fast-4.16", "stable-4.16"]
+
+    response = client.post("/api/channels/refresh?version=4.16")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert payload["source"] == "cincinnati"

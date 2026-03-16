@@ -73,11 +73,12 @@ def test_available_catalogs_endpoint_returns_base_catalogs(monkeypatch):
 
     class CompletedProcess:
         returncode = 0
+        stdout = "{}"
         stderr = ""
 
     def fake_run(cmd, capture_output, text, timeout):
-        assert cmd[:4] == ["oc-mirror", "list", "operators", "--catalogs"]
-        assert timeout == 120
+        assert cmd[:3] == ["skopeo", "inspect", "--no-tags"]
+        assert timeout == 30
         return CompletedProcess()
 
     monkeypatch.setattr("imageset_generator.app.subprocess.run", fake_run)
