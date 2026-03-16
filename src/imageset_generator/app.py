@@ -16,7 +16,7 @@ import yaml
 import os
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from .generator import ImageSetGenerator
 import traceback
 from .constants import (
@@ -821,7 +821,7 @@ def refresh_catalogs_for_version(version=None):
                 return jsonify({
                     'status': 'error',
                     'message': f'Failed to generate catalogs for version {version_key}: {str(e)}',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }), 500
                 
     except Exception as e:
@@ -829,7 +829,7 @@ def refresh_catalogs_for_version(version=None):
         return jsonify({
             'status': 'error',
             'message': f'Failed to discover catalogs: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
     # Write Catalog info to File
@@ -844,7 +844,7 @@ def refresh_catalogs_for_version(version=None):
         'version': version,
         'catalogs': discovered_catalogs,
         'source': 'base_catalogs',
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
 @app.route('/api/versions/', methods=['GET'])
@@ -1037,7 +1037,7 @@ def get_ocp_channels(version):
                     'version': version,
                     'channels': _sort_channels(channel_data, version),
                     'source': 'static_file',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 })
     except Exception as e:
         app.logger.warning(f"Could not load static OCP versions file: {e}")
@@ -1053,13 +1053,13 @@ def get_ocp_channels(version):
                     'version': version,
                     'channels': _sort_channels(channels[version], version),
                     'source': 'cincinnati',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 })
             else:
                 return jsonify({
                     'status': 'error',
                     'message': f'No channels found for version {version}',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }), 404
     except Exception as e:
         app.logger.error(f"Error querying Cincinnati API for channels for version {version}: {e}")
@@ -1126,7 +1126,7 @@ def get_operator_catalogs(version):
                 'version': version,
                 'catalogs': catalogs,
                 'source': 'static_file',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             })
         except Exception as e:
             app.logger.warning(f"Could not load static catalog file: {e}")
@@ -1138,7 +1138,7 @@ def get_operator_catalogs(version):
         return jsonify({
             'status': 'error',
             'message': f'Failed to get operator catalogs for version {version}: {catalogs.json.get("message")}',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
     # Save the catalogs
@@ -1148,7 +1148,7 @@ def get_operator_catalogs(version):
         return jsonify({
             'status': 'error',
             'message': f'No operator catalogs found for version {version}',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 404
 
     return jsonify({
@@ -1156,7 +1156,7 @@ def get_operator_catalogs(version):
         'version': version,
         'catalogs': available_catalogs,
         'source': 'opm',
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
 
@@ -1219,7 +1219,7 @@ def get_available_catalogs():
             'status': 'success',
             'catalogs': validated_catalogs,
             'count': len(validated_catalogs),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
 
     except Exception as e:
@@ -1227,7 +1227,7 @@ def get_available_catalogs():
         return jsonify({
             'status': 'error',
             'message': f'Failed to get available catalogs: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 
@@ -1244,7 +1244,7 @@ def list_catalogs_for_version(version):
             'version': version,
             'catalogs': cached_catalogs,
             'source': 'static_file',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     # If not cached, discover catalogs dynamically
@@ -1299,14 +1299,14 @@ def get_operators_list():
         return jsonify({
             'status': 'success',
             'operators': operators,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
         app.logger.error(f"Error loading operators from cache: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Failed to load operators: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 
@@ -1359,7 +1359,7 @@ def get_operator_channels(operator_name):
                     'channels': channels,
                     'default_channel': default_channel,
                     'source': 'cache',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 })
 
         # Fall back to opm render
@@ -1379,7 +1379,7 @@ def get_operator_channels(operator_name):
                 'catalog': catalog_url,
                 'channels': [{'name': 'stable', 'default': True}],
                 'default_channel': 'stable',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             })
 
         # Parse opm render JSON output line by line (NDJSON format)
@@ -1425,21 +1425,21 @@ def get_operator_channels(operator_name):
             'channels': channels,
             'default_channel': default_channel,
             'source': 'opm_render',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
 
     except subprocess.TimeoutExpired:
         return jsonify({
             'status': 'error',
             'message': 'Request timeout while fetching operator channels',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 504
     except Exception as e:
         app.logger.error(f"Error fetching operator channels: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Failed to fetch operator channels: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 
