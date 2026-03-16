@@ -86,7 +86,8 @@ def process_operator_data(operator):
             "version": None,
             "minVersion": None,
             "maxVersion": None,
-            "selectedVersions": None
+            "selectedVersions": None,
+            "fileName": None
         }
     elif isinstance(operator, dict):
         return {
@@ -1461,65 +1462,64 @@ def generate_preview():
                 if not op_entry:
                     continue
                     
-                # Store channel mapping if present
-                available_versions = set([])
-                possible_versions = []
+                # Filter versions when catalog and version range are available
                 name = op_data.get('name')
-                version_key = data.get('ocp_versions', [None])[0]
-                catalog_name = op_data.get('catalog', "")
-                catalog_index = (catalog_name.split('/')[-1]).split(':')[0]
-                static_file_path = _data_read_file(f"operators-{catalog_index}-{version_key}.json")
-                temp_channel_version_map = {}
-                
-                #Open static_file_path and get all available versions of operator between the selected min and max values
-                with open(static_file_path, 'r') as f:
-                    operator_catalog_data = json.load(f)
-                    for operator in operator_catalog_data.get('operators', []):
-                        if operator.get('name') == name:
-                            possible_versions.append(operator.get('version', []))
-                            temp_channel_version_map[operator.get('version')] = operator.get('channel')
-
                 min_version = op_data.get('minVersion')
                 max_version = op_data.get('maxVersion')
-
+                catalog_name = op_data.get('catalog') or data.get('operator_catalog') or ""
                 channel_list = set([])
-                        
-                for version in possible_versions:
-                    try:
-                        if Version_Checker(version) >= Version_Checker(min_version) and Version_Checker(version) <= Version_Checker(max_version):
-                            available_versions.add(version)
-                            channel_list.add(temp_channel_version_map.get(version))
-                            if version == max_version:
-                                newest_channel[name] = temp_channel_version_map.get(version)
-                            continue
-                    except Exception as e:
-                        app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}") 
-                        
-                    try:
-                        temp_version=version.split("-")[0]
-                        temp_max_version=max_version.split("-")[0]
-                        temp_min_version=min_version.split("-")[0]
-                        if Version_Checker(temp_version) >= Version_Checker(temp_min_version) and Version_Checker(temp_version) <= Version_Checker(temp_max_version):
-                            available_versions.add(version)
-                            channel_list.add(temp_channel_version_map.get(version))
-                            if temp_version == temp_max_version:
-                                newest_channel[name] = temp_channel_version_map.get(version)
-                            continue
-                    except Exception as e:
-                        app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}") 
+
+                if catalog_name and min_version and max_version:
+                    version_key = data.get('ocp_versions', [None])[0]
+                    catalog_index = (catalog_name.split('/')[-1]).split(':')[0]
+                    static_file_path = _data_read_file(f"operators-{catalog_index}-{version_key}.json")
+                    temp_channel_version_map = {}
+                    possible_versions = []
 
                     try:
-                        temp_version=version.split("+")[0]
-                        temp_max_version=max_version.split("+")[0]
-                        temp_min_version=min_version.split("+")[0]
-                        if Version_Checker(temp_version) >= Version_Checker(temp_min_version) and Version_Checker(temp_version) <= Version_Checker(temp_max_version):
-                            available_versions.add(version)
-                            channel_list.add(temp_channel_version_map.get(version))
-                            if temp_version == temp_max_version:
-                                newest_channel[name] = temp_channel_version_map.get(version)
-                            continue
-                    except Exception as e:
-                        app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}") 
+                        with open(static_file_path, 'r') as f:
+                            operator_catalog_data = json.load(f)
+                            for operator in operator_catalog_data.get('operators', []):
+                                if operator.get('name') == name:
+                                    possible_versions.append(operator.get('version', []))
+                                    temp_channel_version_map[operator.get('version')] = operator.get('channel')
+                    except FileNotFoundError:
+                        app.logger.warning(f"Static operator data not found: {static_file_path}")
+
+                    for version in possible_versions:
+                        try:
+                            if Version_Checker(version) >= Version_Checker(min_version) and Version_Checker(version) <= Version_Checker(max_version):
+                                channel_list.add(temp_channel_version_map.get(version))
+                                if version == max_version:
+                                    newest_channel[name] = temp_channel_version_map.get(version)
+                                continue
+                        except Exception as e:
+                            app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}")
+
+                        try:
+                            temp_version=version.split("-")[0]
+                            temp_max_version=max_version.split("-")[0]
+                            temp_min_version=min_version.split("-")[0]
+                            if Version_Checker(temp_version) >= Version_Checker(temp_min_version) and Version_Checker(temp_version) <= Version_Checker(temp_max_version):
+                                channel_list.add(temp_channel_version_map.get(version))
+                                if temp_version == temp_max_version:
+                                    newest_channel[name] = temp_channel_version_map.get(version)
+                                continue
+                        except Exception as e:
+                            app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}")
+
+                        try:
+                            temp_version=version.split("+")[0]
+                            temp_max_version=max_version.split("+")[0]
+                            temp_min_version=min_version.split("+")[0]
+                            if Version_Checker(temp_version) >= Version_Checker(temp_min_version) and Version_Checker(temp_version) <= Version_Checker(temp_max_version):
+                                channel_list.add(temp_channel_version_map.get(version))
+                                if temp_version == temp_max_version:
+                                    newest_channel[name] = temp_channel_version_map.get(version)
+                                continue
+                        except Exception as e:
+                            app.logger.warning(f"Version comparison error for {name} version {version} will try other method: {e}")
+
                 channels[op_data["name"]] = channel_list
 
                 # Group by catalog
