@@ -299,7 +299,7 @@ def health_check():
 @app.route("/api/versions/refresh", methods=["POST"])
 def refresh_versions():
     """Refresh the list of available OCP releases"""
-    # Logic to refresh the releases (e.g., by re-running oc-mirror)
+    # Logic to refresh the releases via Cincinnati API
     app.logger.debug("Refreshing OCP releases...")
     releases = []
     static_file_path = _data_write_file("ocp-versions.json")
@@ -747,7 +747,7 @@ def refresh_ocp_channels(version=None):
 
 @app.route('/api/operators/catalogs/<version>/refresh', methods=['POST'])
 def refresh_catalogs_for_version(version=None):
-    """Refresh available operator catalogs dynamically using oc-mirror"""
+    """Refresh available operator catalogs from BASE_CATALOGS constants"""
     version_list = []
     discovered_catalogs = {}
     
@@ -826,7 +826,7 @@ def refresh_catalogs_for_version(version=None):
 
 @app.route('/api/versions/', methods=['GET'])
 def get_versions():
-    # Get available OCP releases using static files or oc-mirror
+    # Get available OCP releases using static files or Cincinnati API
     app.logger.debug("Fetching OCP releases...")
     releases = []
 
@@ -844,7 +844,7 @@ def get_versions():
 
 
 
-    # If static file does not exist, run oc-mirror to get releases
+    # If static file does not exist, refresh via Cincinnati API
     if releases != []:
         app.logger.debug("Static file found, using cached releases")
         return jsonify({
@@ -875,7 +875,7 @@ def get_versions():
 
 @app.route("/api/releases/<version>/<channel>", methods=["GET"])
 def get_ocp_releases(version, channel):
-    """Get available OCP releases for a specific version and channel using oc-mirror"""
+    """Get available OCP releases for a specific version and channel"""
 
     if version is None:
         return jsonify({
@@ -931,7 +931,7 @@ def get_ocp_releases(version, channel):
     except Exception as e:
         app.logger.warning(f"Could not load static channel releases file: {e}")
         
-    # If static file does not exist, run oc-mirror to get releases
+    # If static file does not exist, refresh via Cincinnati API
     try:
         release_data = refresh_ocp_releases(version, channel)
         if release_data.json.get("status") == "success":
@@ -958,7 +958,7 @@ def get_ocp_releases(version, channel):
 
 @app.route("/api/channels/<version>", methods=["GET"])
 def get_ocp_channels(version):
-    """Get available OCP channels for a specific version using oc-mirror"""
+    """Get available OCP channels for a specific version"""
     
     if version is None:
         return jsonify({
@@ -997,7 +997,7 @@ def get_ocp_channels(version):
     except Exception as e:
         app.logger.warning(f"Could not load static OCP versions file: {e}")
                  
-    # If static file does not exist, run oc-mirror to get channels
+    # If static file does not exist, refresh via Cincinnati API
     try:
         channel_data = refresh_ocp_channels(version)
         if channel_data.json.get("status") == "success":
@@ -1058,7 +1058,7 @@ def get_operator_mappings():
 
 @app.route('/api/operators/catalogs/<version>', methods=['GET'])
 def get_operator_catalogs(version):
-    """Get operator catalog data for a specific OCP version from static file or oc-mirror"""
+    """Get operator catalog data for a specific OCP version from static file or refresh"""
 
     # Extract major.minor version from version string
     if '.' in version:
@@ -1086,7 +1086,7 @@ def get_operator_catalogs(version):
         except Exception as e:
             app.logger.warning(f"Could not load static catalog file: {e}")
 
-    # If static file does not exist, run oc-mirror to obtain it
+    # If static file does not exist, refresh from BASE_CATALOGS
     catalogs = refresh_catalogs_for_version(version)
     if catalogs.json.get("status") != "success":
         app.logger.error(f"Failed to get catalogs for version {version}: {catalogs.json.get('message')}")
@@ -1096,7 +1096,7 @@ def get_operator_catalogs(version):
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
-    # If oc-mirror was successful, save the catalogs
+    # Save the catalogs
     available_catalogs = catalogs.json.get("data", [])
     if not available_catalogs:
         app.logger.warning(f"No catalogs found for version {version}")
@@ -1188,7 +1188,7 @@ def get_available_catalogs():
 
 @app.route('/api/operators/catalogs/<version>/list', methods=['GET'])
 def list_catalogs_for_version(version):
-    """Use oc-mirror to list available catalogs for a specific OCP version"""
+    """List available catalogs for a specific OCP version from cache or refresh"""
 
     #Check if catalogs for this version are cached
     cached_catalogs = load_catalogs_from_file(version)
@@ -1754,7 +1754,7 @@ def validate_config():
 @app.route("/api/refresh/all", methods=["GET"])
 def refresh_all_static_data():
     """
-    Refresh all static data files by calling oc-mirror for:
+    Refresh all static data files:
     - OCP releases
     - Operator catalogs for all known OCP versions
     """
