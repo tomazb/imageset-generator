@@ -91,6 +91,13 @@ TIMEOUT_OC_MIRROR_MEDIUM = 120    # For catalog listings
 TIMEOUT_OC_MIRROR_LONG = 180      # For render operations
 TIMEOUT_OPM_RENDER = 180          # For opm render commands
 TIMEOUT_CATALOG_DISCOVERY = 300   # For catalog discovery
+TIMEOUT_CINCINNATI = 15           # For Cincinnati API requests
+TIMEOUT_SKOPEO = 30               # For skopeo inspect commands
+
+# Cincinnati API Configuration
+CINCINNATI_API_URL = "https://api.openshift.com/api/upgrades_info/v1/graph"
+CINCINNATI_CHANNEL_PREFIXES = ["candidate", "fast", "stable", "eus"]
+OCP_MINOR_PROBE_RANGE = range(1, 30)
 
 # Server Configuration
 DEFAULT_PORT = 5000
