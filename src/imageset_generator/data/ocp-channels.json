@@ -2,11 +2,6 @@
   "channels": {
     "4.21": [
       "stable-4.21",
-      "candidate-4.22",
-      "candidate-4.20",
-      "eus-4.20",
-      "fast-4.20",
-      "stable-4.20",
       "candidate-4.21",
       "fast-4.21"
     ],
