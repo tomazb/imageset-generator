@@ -97,7 +97,7 @@ TIMEOUT_SKOPEO = 30               # For skopeo inspect commands
 # Cincinnati API Configuration
 CINCINNATI_API_URL = "https://api.openshift.com/api/upgrades_info/v1/graph"
 CINCINNATI_CHANNEL_PREFIXES = ["candidate", "fast", "stable", "eus"]
-OCP_MINOR_PROBE_RANGE = range(1, 30)
+OCP_MINOR_PROBE_RANGE = range(12, 30)
 
 # Server Configuration
 DEFAULT_PORT = 5000
