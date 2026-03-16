@@ -69,8 +69,7 @@ function App() {
     additional_images: [],
     helm_charts: [],
     output_file: 'imageset-config.yaml',
-    kubevirt_container: false,
-    storageConfig: { registry: '', skipTLS: false }
+    kubevirt_container: false
   });
   const [yamlPreview, setYamlPreview] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -92,31 +91,7 @@ function App() {
     if (updates.operator_catalogs) {
       updates.operator_catalogs = [...updates.operator_catalogs];
     }
-    // Deep merge for storageConfig to avoid [object Object] bug
-    let newConfig;
-    if (updates.storageConfig) {
-      // Remove any non-serializable fields from storageConfig
-      const safeStorageConfig = {};
-      for (const key in updates.storageConfig) {
-        const v = updates.storageConfig[key];
-        if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number' || v === null || v === undefined) {
-          safeStorageConfig[key] = v;
-        } else {
-          // Defensive: skip objects, functions, DOM nodes, etc.
-          console.warn('Skipped non-serializable storageConfig value:', key, v);
-        }
-      }
-      newConfig = {
-        ...config,
-        ...updates,
-        storageConfig: {
-          ...config.storageConfig,
-          ...safeStorageConfig
-        }
-      };
-    } else {
-      newConfig = { ...config, ...updates };
-    }
+    const newConfig = { ...config, ...updates };
     console.log('Config updated:', newConfig);
   setConfig(newConfig);
   // Force re-render for debugging

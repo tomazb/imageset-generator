@@ -192,23 +192,23 @@ function PreviewGenerate({ config, yamlPreview, isGenerating, onGeneratePreview,
             <CardBody>
               <TextContent>
                 <Text>
-                  Once you have downloaded the ImageSetConfiguration file, you can use it with the oc-mirror tool:
+                  Once you have downloaded the ImageSetConfiguration file, you can use it with the oc-mirror v2 tool:
                 </Text>
               </TextContent>
-              
+
               <CodeBlock style={{ marginTop: '1rem' }}>
                 <CodeBlockCode>
 {`# Mirror to disk
-oc-mirror --config ${config.output_file || 'imageset-config.yaml'} file://mirror-output
+oc-mirror --v2 --config ${config.output_file || 'imageset-config.yaml'} file://mirror-output
 
 # Mirror to registry
-oc-mirror --config ${config.output_file || 'imageset-config.yaml'} docker://your-registry.example.com:5000`}
+oc-mirror --v2 --config ${config.output_file || 'imageset-config.yaml'} docker://your-registry.example.com:5000`}
                 </CodeBlockCode>
               </CodeBlock>
-              
+
               <TextContent style={{ marginTop: '1rem' }}>
                 <Text>
-                  <strong>Note:</strong> Make sure you have the oc-mirror tool installed and configured before running these commands.
+                  <strong>Note:</strong> Make sure you have the oc-mirror tool installed and configured before running these commands. The <code>--v2</code> flag is required for the supported version of oc-mirror.
                 </Text>
               </TextContent>
             </CardBody>

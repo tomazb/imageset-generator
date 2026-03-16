@@ -111,43 +111,17 @@ function AdvancedConfig({ config, updateConfig }) {
         </Card>
       </GridItem>
 
-      {/* Storage Configuration Card moved from BasicConfig */}
       <GridItem span={12}>
         <Card>
           <CardTitle>
             <Title headingLevel="h2">Storage Configuration</Title>
           </CardTitle>
           <CardBody>
-            <Form isHorizontal>
-              <FormGroup label="Registry imageURL" fieldId="storage-registry">
-                <input
-                  type="text"
-                  id="storage-registry"
-                  value={typeof config.storageConfig?.registry === 'string' ? config.storageConfig.registry : ''}
-                  onChange={e => {
-                    let value = '';
-                    if (e && e.target && typeof e.target.value === 'string') {
-                      value = e.target.value;
-                    } else if (typeof e === 'string') {
-                      value = e;
-                    }
-                    // Defensive: never allow DOM nodes or events
-                    if (typeof value !== 'string') value = '';
-                    updateConfig({ storageConfig: { ...config.storageConfig, registry: value } });
-                  }}
-                  placeholder="quay.io/your-registry"
-                  style={{ width: '100%', padding: '6px', fontSize: '1rem' }}
-                />
-              </FormGroup>
-              <FormGroup label="Skip TLS" fieldId="storage-skip-tls">
-                <Checkbox
-                  id="storage-skip-tls"
-                  label="Skip TLS verification for registry"
-                  isChecked={!!config.storageConfig?.skipTLS}
-                  onChange={(event, checked) => updateConfig({ storageConfig: { ...config.storageConfig, skipTLS: checked } })}
-                />
-              </FormGroup>
-            </Form>
+            <Alert variant="info" title="Storage is configured via CLI flags in oc-mirror v2" isInline>
+              Use <code>--workspace file://&lt;path&gt;</code> to set the local storage directory,
+              or <code>--workspace docker://&lt;registry&gt;</code> to use a registry backend.
+              See <code>oc-mirror --v2 --help</code> for all options.
+            </Alert>
           </CardBody>
         </Card>
       </GridItem>
