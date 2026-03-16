@@ -439,7 +439,7 @@ class KubernetesManager:
         command = [
             "/bin/bash",
             "-c",
-            f"oc-mirror --config /config/imageset-config.yaml file://{storage_mount_path}"
+            f"oc-mirror --v2 --config /config/imageset-config.yaml file://{storage_mount_path}"
         ]
 
         # Build container spec
