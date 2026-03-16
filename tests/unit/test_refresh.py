@@ -71,3 +71,96 @@ def test_refresh_channels_success(mock_channels, client, monkeypatch, tmp_path):
     payload = response.get_json()
     assert payload["status"] == "success"
     assert payload["source"] == "cincinnati"
+
+
+@patch("imageset_generator.app.load_operators_from_file")
+def test_operators_list_cache_miss_returns_refreshed_operators(
+    mock_load, client
+):
+    """When cached operators file is empty, /api/operators/list should call
+    refresh and return the operator list as JSON — not a serialization error."""
+    expected_operators = [
+        {"name": "elasticsearch-operator", "channels": ["stable"]},
+        {"name": "cluster-logging", "channels": ["stable-5.8"]},
+    ]
+    mock_load.return_value = None
+
+    # Mock refresh_ocp_operators at the route level — it's a Flask view that
+    # returns a Response, which is what triggers the serialization bug when
+    # get_operators_list tries to jsonify the Response object.
+    with patch("imageset_generator.app.refresh_ocp_operators") as mock_refresh:
+        from flask import jsonify as _jsonify
+        with app.test_request_context():
+            mock_refresh.return_value = _jsonify({
+                "status": "success",
+                "data": expected_operators,
+            })
+
+        response = client.get(
+            "/api/operators/list"
+            "?catalog=registry.redhat.io/redhat/redhat-operator-index"
+            "&version=4.17"
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert len(payload["operators"]) == 2
+    assert payload["operators"][0]["name"] == "elasticsearch-operator"
+
+
+def test_channels_endpoint_returns_sorted_channels(client, tmp_path):
+    """Channels for /api/channels/<version> should be sorted:
+    selected version first, then ascending by version,
+    within each version: stable > fast > eus > candidate."""
+    # Prepare a static ocp-channels.json with unsorted data
+    channels_data = {
+        "channels": {
+            "4.20": [
+                "candidate-4.22",
+                "eus-4.20",
+                "stable-4.21",
+                "fast-4.18",
+                "fast-4.19",
+                "stable-4.20",
+                "candidate-4.18",
+                "eus-4.18",
+                "candidate-4.19",
+                "stable-4.19",
+                "candidate-4.20",
+                "stable-4.18",
+                "fast-4.20",
+                "candidate-4.21",
+                "fast-4.21",
+            ]
+        }
+    }
+
+    with patch("imageset_generator.app._data_read_file") as mock_path:
+        static_file = tmp_path / "ocp-channels.json"
+        static_file.write_text(json.dumps(channels_data))
+        mock_path.return_value = static_file
+
+        response = client.get("/api/channels/4.20")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["channels"] == [
+        # selected version (4.20) first
+        "stable-4.20",
+        "fast-4.20",
+        "eus-4.20",
+        "candidate-4.20",
+        # then ascending by version
+        "stable-4.18",
+        "fast-4.18",
+        "eus-4.18",
+        "candidate-4.18",
+        "stable-4.19",
+        "fast-4.19",
+        "candidate-4.19",
+        "stable-4.21",
+        "fast-4.21",
+        "candidate-4.21",
+        "candidate-4.22",
+    ]
