@@ -37,7 +37,8 @@ RUN microdnf -y install \
     && microdnf clean all
 
 # Download and install oc-mirror tool
-RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest-4.18/oc-mirror.tar.gz \
+ARG OCP_VERSION=latest-4.18
+RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCP_VERSION}/oc-mirror.tar.gz \
     && tar -xzf oc-mirror.tar.gz \
     && chmod +x oc-mirror \
     && mv oc-mirror /usr/local/bin/ \
@@ -78,9 +79,9 @@ USER app
 # Expose port
 EXPOSE 5000
 
-# Health check
+# Health check (curl not available in ubi-minimal, use python)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/api/health || exit 1
+    CMD python3.11 -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
 # Run the application
 CMD ["./scripts/startup.sh"]

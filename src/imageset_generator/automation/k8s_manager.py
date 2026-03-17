@@ -443,15 +443,22 @@ class KubernetesManager:
             volumes.append({"name": "mirror-storage", "emptyDir": {}})
 
         storage_mount_path = storage_config.get("mount_path", "/mirror")
+        # Validate storage mount path against strict pattern to prevent injection
+        if not re.match(r"^/[a-zA-Z0-9/_-]+$", storage_mount_path):
+            raise ValueError(
+                f"Invalid storage mount path: must match /[a-zA-Z0-9/_-]+"
+            )
         volume_mounts.append(
             {"name": "mirror-storage", "mountPath": storage_mount_path}
         )
 
-        # Build oc-mirror command
+        # Build oc-mirror command (list form, no shell wrapper)
         command = [
-            "/bin/bash",
-            "-c",
-            f"oc-mirror --v2 --config /config/imageset-config.yaml file://{storage_mount_path}",
+            "oc-mirror",
+            "--v2",
+            "--config",
+            "/config/imageset-config.yaml",
+            f"file://{storage_mount_path}",
         ]
 
         # Build container spec

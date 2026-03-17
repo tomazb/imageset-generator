@@ -6,6 +6,7 @@ which were removed in oc-mirror v2.
 """
 
 import logging
+import time
 from typing import Optional
 
 import requests
@@ -22,6 +23,12 @@ logger = logging.getLogger(__name__)
 
 _session: Optional[requests.Session] = None
 
+VALID_ARCHITECTURES = {"amd64", "arm64", "ppc64le", "s390x"}
+
+# Simple TTL cache for discover_ocp_versions results
+_versions_cache: dict[str, tuple[float, list[str]]] = {}
+_VERSIONS_CACHE_TTL = 3600  # 1 hour
+
 
 def _get_session() -> requests.Session:
     """Return a module-level requests session for connection pooling."""
@@ -37,12 +44,22 @@ def _get_session() -> requests.Session:
     return _session
 
 
+def _validate_arch(arch: str) -> str:
+    """Validate architecture parameter against known values."""
+    if arch not in VALID_ARCHITECTURES:
+        raise ValueError(
+            f"Invalid architecture '{arch}'. Must be one of: {', '.join(sorted(VALID_ARCHITECTURES))}"
+        )
+    return arch
+
+
 def _query_cincinnati(channel: str, arch: str = "amd64") -> Optional[dict]:
     """
     Query the Cincinnati API for a given channel and architecture.
 
     Returns the parsed JSON response or None on failure.
     """
+    _validate_arch(arch)
     params = {"channel": channel, "arch": arch}
     try:
         resp = _get_session().get(
@@ -78,7 +95,19 @@ def discover_ocp_versions(arch: str = "amd64") -> list[str]:
     minor in the configured probe range.  A version is included if ANY
     channel reports nodes, so pre-stable minors are not missed.
     Returns sorted list like ``["4.14", "4.15", "4.16"]``.
+
+    Results are cached for 1 hour per architecture to avoid excessive API calls.
     """
+    _validate_arch(arch)
+
+    # Check cache
+    cached = _versions_cache.get(arch)
+    if cached is not None:
+        cache_time, cache_result = cached
+        if time.time() - cache_time < _VERSIONS_CACHE_TTL:
+            logger.debug("Returning cached OCP versions for arch=%s", arch)
+            return list(cache_result)  # return copy
+
     # Order stable first — most common, avoids redundant API calls
     prefixes = ["stable", "fast", "candidate", "eus"]
     versions: list[str] = []
@@ -90,6 +119,10 @@ def discover_ocp_versions(arch: str = "amd64") -> list[str]:
                 versions.append(f"4.{minor}")
                 break
     versions.sort(key=lambda v: tuple(int(p) for p in v.split(".")))
+
+    # Store in cache
+    _versions_cache[arch] = (time.time(), list(versions))
+
     return versions
 
 

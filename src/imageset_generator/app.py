@@ -181,6 +181,7 @@ def prepare_operator_entry(op_data):
 
 
 app = Flask(__name__, static_folder=FRONTEND_BUILD_DIR)
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB request size limit
 CORS(app)  # Enable CORS for all routes
 
 # Initialize automation (optional - only if config exists)
@@ -435,7 +436,7 @@ def refresh_versions():
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to refresh releases: {str(e)}",
+                    "message": "Failed to refresh releases. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -684,6 +685,16 @@ def refresh_ocp_operators(catalog=None, version=None):
     """Refresh the list of available OCP operators"""
     app.logger.debug("Refreshing OCP operators...")
 
+    # Extract parameters from request when called via HTTP
+    if catalog is None:
+        if request and request.is_json:
+            data = request.get_json(silent=True) or {}
+            catalog = data.get("catalog")
+            version = data.get("version", version)
+        elif request:
+            catalog = request.args.get("catalog")
+            version = request.args.get("version", version)
+
     # Validate required parameters
     if catalog is None:
         return (
@@ -712,7 +723,7 @@ def refresh_ocp_operators(catalog=None, version=None):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to refresh operators: {str(e)}",
+                    "message": "Failed to refresh operators. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -724,7 +735,7 @@ def refresh_ocp_operators(catalog=None, version=None):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to refresh operators: {str(e)}",
+                    "message": "Failed to refresh operators. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -827,7 +838,7 @@ def refresh_ocp_releases(version=None, channel=None):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to refresh releases: {str(e)}",
+                    "message": "Failed to refresh releases. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -940,7 +951,7 @@ def refresh_ocp_channels(version=None):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to refresh channels: {str(e)}",
+                    "message": "Failed to refresh channels. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -1043,7 +1054,7 @@ def refresh_catalogs_for_version(version=None):
                     jsonify(
                         {
                             "status": "error",
-                            "message": f"Failed to generate catalogs for version {version_key}: {str(e)}",
+                            "message": f"Failed to generate catalogs for version {version_key}. Check server logs for details.",
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     ),
@@ -1056,7 +1067,7 @@ def refresh_catalogs_for_version(version=None):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to discover catalogs: {str(e)}",
+                    "message": "Failed to discover catalogs. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -1258,7 +1269,7 @@ def get_ocp_releases(version, channel):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to get OCP releases for version {version} and channel {channel}: {str(e)}",
+                    "message": f"Failed to get OCP releases for version {version} and channel {channel}. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -1376,7 +1387,7 @@ def get_ocp_channels(version):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to get OCP channels for version {version}: {str(e)}",
+                    "message": f"Failed to get OCP channels for version {version}. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -1551,7 +1562,7 @@ def get_available_catalogs():
                     "default": catalog["default"],
                 }
                 catalog_info["validated"] = False
-                catalog_info["error"] = str(e)
+                catalog_info["error"] = "Validation failed"
                 validated_catalogs.append(catalog_info)
                 app.logger.warning(
                     f"Error validating catalog {catalog['base_url']}: {e}"
@@ -1572,7 +1583,7 @@ def get_available_catalogs():
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to get available catalogs: {str(e)}",
+                    "message": "Failed to get available catalogs. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -1675,7 +1686,7 @@ def get_operators_list():
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to load operators: {str(e)}",
+                    "message": "Failed to load operators. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -1843,7 +1854,7 @@ def get_operator_channels(operator_name):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to fetch operator channels: {str(e)}",
+                    "message": "Failed to fetch operator channels. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -2070,7 +2081,7 @@ def generate_preview():
         app.logger.error(traceback.format_exc())
         return (
             jsonify(
-                {"error": f"Failed to generate preview: {str(e)}", "success": False}
+                {"error": "Failed to generate preview. Check server logs for details.", "success": False}
             ),
             500,
         )
@@ -2251,7 +2262,7 @@ def generate_download():
         app.logger.error(traceback.format_exc())
         return (
             jsonify(
-                {"error": f"Failed to generate download: {str(e)}", "success": False}
+                {"error": "Failed to generate download. Check server logs for details.", "success": False}
             ),
             500,
         )
@@ -2332,7 +2343,7 @@ def validate_config():
         return (
             jsonify(
                 {
-                    "error": f"Failed to validate configuration: {str(e)}",
+                    "error": "Failed to validate configuration. Check server logs for details.",
                     "success": False,
                 }
             ),
@@ -2359,7 +2370,7 @@ def refresh_all_static_data():
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Error refreshing static data: {str(e)}",
+                    "message": "Error refreshing static data. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -2431,7 +2442,7 @@ def get_ocp_versions_static():
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Error reading OCP versions: {str(e)}",
+                    "message": "Error reading OCP versions. Check server logs for details.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),

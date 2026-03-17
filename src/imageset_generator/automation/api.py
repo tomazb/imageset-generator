@@ -89,7 +89,7 @@ def get_status():
 
     except Exception as e:
         logger.exception(f"Error getting automation status: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/trigger", methods=["POST"])
@@ -113,7 +113,7 @@ def trigger_automation():
 
     except Exception as e:
         logger.exception(f"Error triggering automation: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/config", methods=["GET"])
@@ -130,7 +130,7 @@ def get_config():
 
     except Exception as e:
         logger.exception(f"Error getting automation config: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/config", methods=["PUT"])
@@ -159,7 +159,7 @@ def update_config():
 
     except Exception as e:
         logger.exception(f"Error updating automation config: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/history", methods=["GET"])
@@ -170,8 +170,8 @@ def get_history():
             return jsonify({"error": "Automation is not initialized"}), 400
 
         # Get query parameters
-        limit = request.args.get("limit", default=50, type=int)
-        offset = request.args.get("offset", default=0, type=int)
+        limit = min(request.args.get("limit", default=50, type=int), 1000)
+        offset = max(request.args.get("offset", default=0, type=int), 0)
 
         history = _scheduler.engine.history
 
@@ -192,7 +192,7 @@ def get_history():
 
     except Exception as e:
         logger.exception(f"Error getting automation history: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/history/<execution_id>", methods=["GET"])
@@ -216,7 +216,7 @@ def get_execution(execution_id: str):
 
     except Exception as e:
         logger.exception(f"Error getting execution: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/jobs", methods=["GET"])
@@ -256,7 +256,7 @@ def get_jobs():
 
     except Exception as e:
         logger.exception(f"Error getting jobs: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/jobs/<job_name>", methods=["GET"])
@@ -310,7 +310,7 @@ def get_job(job_name: str):
         if hasattr(e, "status") and e.status == 404:
             return jsonify({"error": "Job not found"}), 404
         logger.exception(f"Error getting job: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 @automation_bp.route("/jobs/<job_name>/logs", methods=["GET"])
@@ -324,7 +324,7 @@ def get_job_logs(job_name: str):
         if not k8s_manager:
             return jsonify({"error": "Kubernetes manager not available"}), 400
 
-        tail_lines = request.args.get("tail", default=100, type=int)
+        tail_lines = min(request.args.get("tail", default=100, type=int), 10000)
 
         logs = k8s_manager.get_job_logs(job_name, tail_lines=tail_lines)
 
@@ -335,7 +335,7 @@ def get_job_logs(job_name: str):
 
     except Exception as e:
         logger.exception(f"Error getting job logs: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error. Check server logs for details."}), 500
 
 
 def sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:

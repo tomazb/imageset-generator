@@ -1,7 +1,9 @@
 """Unit tests for the Cincinnati API discovery module."""
 
+import pytest
 from unittest.mock import MagicMock, patch
 
+import imageset_generator.discovery as discovery_mod
 from imageset_generator.discovery import (
     _query_cincinnati,
     discover_channel_releases,
@@ -9,6 +11,14 @@ from imageset_generator.discovery import (
     discover_ocp_versions,
     get_latest_ocp_version,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_discovery_cache():
+    """Clear the versions cache between tests."""
+    discovery_mod._versions_cache.clear()
+    yield
+    discovery_mod._versions_cache.clear()
 
 
 def _make_response(nodes, status_code=200):
