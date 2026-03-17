@@ -103,6 +103,61 @@ def test_available_catalogs_endpoint_returns_base_catalogs(monkeypatch):
     ]
 
 
+def test_version_catalog_list_filters_unvalidated_from_cache(monkeypatch, tmp_path):
+    """Cached catalog files with validated: false entries must not leak to clients."""
+    app.testing = True
+    client = app.test_client()
+
+    cached = {"4.17": [
+        {"name": "good", "url": "reg/good:v4.17", "description": "ok", "default": True, "validated": True},
+        {"name": "bad", "url": "reg/bad:v4.17", "description": "nope", "default": False, "validated": False},
+        {"name": "missing", "url": "reg/missing:v4.17", "description": "no key", "default": False},
+    ]}
+
+    cache_file = tmp_path / "catalogs-4.17.json"
+    cache_file.write_text(json.dumps(cached))
+
+    monkeypatch.setattr(
+        "imageset_generator.app._data_read_file",
+        lambda filename: tmp_path / filename,
+    )
+
+    response = client.get("/api/operators/catalogs/4.17/list")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["source"] == "static_file"
+    assert len(payload["catalogs"]) == 1
+    assert payload["catalogs"][0]["name"] == "good"
+
+
+def test_version_refresh_excludes_unvalidated_catalogs(monkeypatch):
+    """refresh_catalogs_for_version must not include catalogs that fail skopeo inspect."""
+    app.testing = True
+    client = app.test_client()
+
+    call_count = {"n": 0}
+
+    class FailProcess:
+        returncode = 1
+        stdout = ""
+        stderr = "not found"
+
+    def fake_run(cmd, capture_output, text, timeout):
+        call_count["n"] += 1
+        return FailProcess()
+
+    monkeypatch.setattr("imageset_generator.app.subprocess.run", fake_run)
+
+    response = client.post("/api/operators/catalogs/9.99/refresh")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    # All catalogs failed validation, so none should be returned
+    assert payload["catalogs"]["9.99"] == []
+    assert call_count["n"] == len(BASE_CATALOGS)
+
+
 def test_packaged_automation_modules_import():
     from imageset_generator.automation.engine import AutomationEngine, load_config
     from imageset_generator.automation.scheduler import AutomationScheduler

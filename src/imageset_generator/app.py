@@ -813,13 +813,16 @@ def refresh_catalogs_for_version(version=None):
                     except (subprocess.TimeoutExpired, Exception):
                         app.logger.warning(f"Could not validate catalog {catalog_url}")
 
-                    discovered_catalogs[version_key].append({
-                        'name': catalog['name'],
-                        'url': catalog_url,
-                        'description': catalog['description'],
-                        'default': catalog['default'],
-                        'validated': validated,
-                    })
+                    if validated:
+                        discovered_catalogs[version_key].append({
+                            'name': catalog['name'],
+                            'url': catalog_url,
+                            'description': catalog['description'],
+                            'default': catalog['default'],
+                            'validated': validated,
+                        })
+                    else:
+                        app.logger.info(f"Excluding unvalidated catalog {catalog_url} from version {version_key}")
             except Exception as e:
                 app.logger.error(f"Error generating catalogs for version {version_key}: {e}")
                 return jsonify({
@@ -1244,10 +1247,14 @@ def list_catalogs_for_version(version):
     cached_catalogs = load_catalogs_from_file(version)
     
     if cached_catalogs is not None:
+        # Cache files are version-keyed dicts, e.g. {"4.17": [...]}.
+        catalog_list = cached_catalogs.get(version, []) if isinstance(cached_catalogs, dict) else cached_catalogs
+        # Filter out unvalidated entries that may exist in stale cache files
+        valid_catalogs = [c for c in catalog_list if c.get('validated', False)]
         return jsonify({
             'status': 'success',
             'version': version,
-            'catalogs': cached_catalogs,
+            'catalogs': valid_catalogs,
             'source': 'static_file',
             'timestamp': datetime.now(timezone.utc).isoformat()
         })
