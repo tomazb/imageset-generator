@@ -14,7 +14,7 @@ Three interfaces are provided: a **web UI** (React + Flask), a **CLI**, and a **
 - **Multiple Interfaces** — Web UI (React/PatternFly + Flask API), command-line, and Tkinter desktop GUI. A smart launcher auto-detects the available display environment.
 - **Live Version & Channel Discovery** — A Cincinnati API client (`discovery.py`) dynamically discovers OCP minor versions, channels (stable, fast, eus, candidate), and individual releases. Bundled seed data allows fully offline operation; live refresh endpoints keep the cache current.
 - **Multi-Architecture** — Discovery and generation across amd64, arm64, ppc64le, and s390x.
-- **Multi-Version** — Supports OCP versions from 4.14 onward (range is discovered dynamically, not hard-coded).
+- **Multi-Version** — Supports OCP versions from 4.12 onward (range is discovered dynamically, not hard-coded).
 - **Multi-Catalog** — Red Hat Operators, Certified Operators, Community Operators, and Red Hat Marketplace catalogs.
 - **Operator Search** — Filter operators by name or keyword. 18 built-in aliases map common names to package names (e.g. `logging` → `cluster-logging`, `istio` → `servicemeshoperator`).
 - **Automation** — Scheduled Kubernetes Job execution, cron-based triggers, and multi-channel notifications (Email, Slack, Webhooks). See [automation/README.md](automation/README.md) for details.
@@ -109,7 +109,7 @@ The project is packaged as `imageset-generator` via `pyproject.toml` (setuptools
 | `cli/gui.py` | Tkinter desktop GUI |
 | `automation/` | Kubernetes job scheduling, cron engine, email/Slack/webhook notifications |
 | `frontend/build/` | Compiled React UI (PatternFly) |
-| `data/*.json` | Bundled seed data (35 JSON files) for offline operation |
+| `data/*.json` | Bundled seed data (33 JSON files) for offline operation |
 
 ### Data path resolution
 
@@ -118,7 +118,7 @@ The application uses a two-tier data strategy:
 | Tier | Path | Purpose |
 |------|------|---------|
 | **Packaged (read-only)** | `src/imageset_generator/data/` | Seed data shipped with the package — always available |
-| **Runtime (writable)** | `./data/` | Cache refreshed from live APIs via `/api/*/refresh` endpoints |
+| **Runtime (writable)** | `./data/` | Cache refreshed from live APIs via `/api/*/refresh` endpoints (gitignored, empty on checkout) |
 
 When reading, the runtime cache is preferred; if absent the packaged seed data is used as a fallback. Helper functions `get_data_read_path()` and `get_data_write_path()` in `constants.py` handle the resolution.
 
@@ -157,6 +157,10 @@ Key endpoints exposed by `app.py`:
 | POST | `/api/channels/refresh` | Refresh channels from Cincinnati API |
 | POST | `/api/releases/refresh` | Refresh releases from Cincinnati API |
 | POST | `/api/operators/refresh` | Refresh operators from a catalog |
+| POST | `/api/operators/catalogs/<version>/refresh` | Refresh catalog data for a version |
+| GET | `/api/operators/catalogs` | List available operator catalogs |
+| GET | `/api/operators/catalogs/<version>/list` | List operators from a catalog version |
+| GET | `/api/ocp-versions` | OCP version list (alternative endpoint) |
 | GET | `/api/refresh/all` | Refresh all cached data |
 
 ## Security
