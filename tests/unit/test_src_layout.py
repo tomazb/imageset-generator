@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 from imageset_generator.app import app
 from imageset_generator.constants import BASE_CATALOGS, PACKAGE_ROOT
 
@@ -279,6 +281,66 @@ def test_generate_preview_accepts_valid_catalog_url():
     assert response.status_code == 200
     payload = response.get_json()
     assert payload.get("success") is True
+
+
+def test_generate_preview_graph_false():
+    """When graph is false, generated YAML must set mirror.platform.graph to false."""
+    app.testing = True
+    client = app.test_client()
+
+    response = client.post(
+        "/api/generate/preview",
+        json={
+            "ocp_versions": ["4.16"],
+            "ocp_channel": "stable-4.16",
+            "graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload.get("success") is True
+    parsed = yaml.safe_load(payload["yaml"])
+    assert parsed["mirror"]["platform"]["graph"] is False
+
+
+def test_generate_preview_graph_default_is_true():
+    """When graph is omitted, generated YAML must set mirror.platform.graph to true."""
+    app.testing = True
+    client = app.test_client()
+
+    response = client.post(
+        "/api/generate/preview",
+        json={
+            "ocp_versions": ["4.16"],
+            "ocp_channel": "stable-4.16",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload.get("success") is True
+    parsed = yaml.safe_load(payload["yaml"])
+    assert parsed["mirror"]["platform"]["graph"] is True
+
+
+def test_generate_download_graph_false():
+    """Download endpoint must set mirror.platform.graph to false when requested."""
+    app.testing = True
+    client = app.test_client()
+
+    response = client.post(
+        "/api/generate/download",
+        json={
+            "ocp_versions": ["4.16"],
+            "ocp_channel": "stable-4.16",
+            "graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    parsed = yaml.safe_load(response.data.decode())
+    assert parsed["mirror"]["platform"]["graph"] is False
 
 
 def test_packaged_automation_modules_import():

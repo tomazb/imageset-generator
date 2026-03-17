@@ -18,7 +18,7 @@ services:
       - IMAGESET_GENERATOR_ROOT=/app
       - DEBUG_MODE=false
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      test: ["CMD", "python3.11", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3

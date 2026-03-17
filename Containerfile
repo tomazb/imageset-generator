@@ -34,6 +34,8 @@ RUN microdnf -y install \
     libassuan \
     device-mapper-libs \
     shadow-utils \
+    skopeo \
+    jq \
     && microdnf clean all
 
 # Download and install oc-mirror tool
@@ -43,6 +45,13 @@ RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCP_
     && chmod +x oc-mirror \
     && mv oc-mirror /usr/local/bin/ \
     && rm oc-mirror.tar.gz
+
+# Download and install opm tool (required for operator catalog rendering)
+RUN wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCP_VERSION}/opm-linux.tar.gz \
+    && tar -xzf opm-linux.tar.gz \
+    && chmod +x opm \
+    && mv opm /usr/local/bin/ \
+    && rm opm-linux.tar.gz
 
 # Copy Python packaging metadata and install dependencies
 COPY requirements.txt pyproject.toml README.md ./

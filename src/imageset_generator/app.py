@@ -1885,6 +1885,7 @@ def generate_preview():
             channel = data.get("ocp_channel", "stable-4.14")
             min_version = data.get("ocp_min_version")
             max_version = data.get("ocp_max_version")
+            graph = data.get("graph", True)
 
             # Support legacy versions list for backward compatibility
             legacy_versions = None
@@ -1896,6 +1897,7 @@ def generate_preview():
                 channel=channel,
                 min_version=min_version,
                 max_version=max_version,
+                graph=graph,
             )
 
         # Add operators
@@ -2109,6 +2111,7 @@ def generate_download():
             channel = data.get("ocp_channel", "stable-4.14")
             min_version = data.get("ocp_min_version")
             max_version = data.get("ocp_max_version")
+            graph = data.get("graph", True)
 
             # Support legacy versions list for backward compatibility
             legacy_versions = None
@@ -2120,6 +2123,7 @@ def generate_download():
                 channel=channel,
                 min_version=min_version,
                 max_version=max_version,
+                graph=graph,
             )
 
         # Add operators
