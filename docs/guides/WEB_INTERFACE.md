@@ -21,9 +21,9 @@ A modern web-based interface for generating OpenShift ImageSetConfiguration file
 ./start-dev.sh
 ```
 
-### Option 3: Docker
+### Option 3: Podman
 ```bash
-docker-compose up
+podman-compose up
 ```
 
 ## Manual Setup
@@ -101,19 +101,35 @@ BUILD_PATH=../src/imageset_generator/frontend/build npm run build
 
 ## API Endpoints
 
-### Configuration Management
-- `POST /api/config/load` - Upload and load configuration file
-- `POST /api/config/save` - Download current configuration as JSON
-- `GET /api/config/sample` - Get sample configuration
-- `POST /api/validate` - Validate configuration data
+### Version & Channel Discovery
+- `GET /api/versions/` - Available OCP minor versions
+- `GET /api/channels/<version>` - Available channels for a version
+- `GET /api/releases/<version>/<channel>` - Releases within a channel
+- `GET /api/ocp-versions` - OCP version list (alternative endpoint)
 
-### Generation
+### Operator Queries
+- `GET /api/operators/catalogs/<version>` - Operator catalog data for a version
+- `GET /api/operators/catalogs` - List available operator catalogs
+- `GET /api/operators/catalogs/<version>/list` - List operators from a catalog version
+- `GET /api/operators/list` - Operators from cached catalog data
+- `GET /api/operators/<name>/channels` - Channels for a specific operator
+- `GET /api/operators/mappings` - Operator alias mappings
+
+### Generation & Validation
 - `POST /api/generate/preview` - Generate YAML preview
 - `POST /api/generate/download` - Generate and download YAML file
+- `POST /api/validate` - Validate configuration data
+
+### Refresh
+- `POST /api/versions/refresh` - Refresh versions from Cincinnati API
+- `POST /api/channels/refresh` - Refresh channels from Cincinnati API
+- `POST /api/releases/refresh` - Refresh releases from Cincinnati API
+- `POST /api/operators/refresh` - Refresh operators from a catalog
+- `POST /api/operators/catalogs/<version>/refresh` - Refresh catalog data for a version
+- `GET /api/refresh/all` - Refresh all cached data
 
 ### Utilities
 - `GET /api/health` - Health check endpoint
-- `GET /api/operators/mappings` - Get operator name mappings
 
 ## Configuration File Format
 
@@ -121,9 +137,21 @@ The web interface uses JSON configuration files:
 
 ```json
 {
-  "ocp_versions": ["4.14.1", "4.14.2"],
-  "ocp_channel": "stable-4.14",
-  "operators": ["logging", "monitoring", "pipelines"],
+  "ocp_versions": ["4.16.1", "4.16.2"],
+  "ocp_channel": "stable-4.16",
+  "ocp_min_version": "4.16.0",
+  "ocp_max_version": "4.16.5",
+  "graph": true,
+  "operators": [
+    "logging",
+    {
+      "name": "elasticsearch-operator",
+      "minVersion": "5.8.0",
+      "maxVersion": "5.9.0",
+      "channel": "stable-5.8",
+      "catalog": "registry.redhat.io/redhat/redhat-operator-index:v4.16"
+    }
+  ],
   "operator_catalog": "registry.redhat.io/redhat/redhat-operator-index",
   "additional_images": ["registry.redhat.io/ubi8/ubi:latest"],
   "helm_charts": [
@@ -137,12 +165,17 @@ The web interface uses JSON configuration files:
 }
 ```
 
-## Environment Variables
+You can specify an OCP version range with `ocp_min_version` / `ocp_max_version` as an alternative to listing explicit `ocp_versions`. The `graph` field (default `true`) controls whether the Cincinnati update graph is included in the output.
+```
 
-### Flask Backend
-- `FLASK_ENV`: Set to `development` or `production`
-- `FLASK_HOST`: Host to bind to (default: 127.0.0.1)
-- `FLASK_PORT`: Port to bind to (default: 5000)
+## Server Configuration
+
+### Flask Backend (CLI arguments)
+- `--host`: Host to bind to (default: `127.0.0.1`)
+- `--port`: Port to bind to (default: `5000`)
+- `--debug`: Enable debug mode
+
+Example: `python -m imageset_generator.app --host 0.0.0.0 --port 8080 --debug`
 
 ### React Frontend (development)
 - `REACT_APP_API_URL`: Backend API URL (auto-detected in production)
@@ -162,9 +195,11 @@ frontend/
 │   └── components/
 │       ├── BasicConfig.js  # Basic configuration form
 │       ├── AdvancedConfig.js # Advanced options form
+│       ├── OperatorSearch.js # Operator search / filter
 │       ├── PreviewGenerate.js # Preview and generation
 │       ├── LoadSaveConfig.js # File operations
-│       └── StatusBar.js    # Status display
+│       ├── StatusBar.js    # Status display
+│       └── LoadingSpinner.js # Loading indicator
 ├── package.json            # Node.js dependencies
 └── build/                  # Production build output
 ```
@@ -210,13 +245,13 @@ cd frontend && BUILD_PATH=../src/imageset_generator/frontend/build npm run build
 python -m imageset_generator.app --host 0.0.0.0 --port 5000
 ```
 
-### Docker
+### Podman
 ```bash
 # Build and run
-docker-compose up
+podman-compose up
 
 # Development mode
-docker-compose --profile dev up
+podman-compose --profile dev up
 ```
 
 ### Reverse Proxy (Nginx)
