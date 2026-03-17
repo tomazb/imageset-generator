@@ -490,7 +490,7 @@ def _render_catalog_index(catalog, output_path):
 
     with open(output_path, "w") as f:
         cmd = build_opm_command(catalog, output_format="json")
-        subprocess.run(cmd, stdout=f, check=True)
+        subprocess.run(cmd, stdout=f, check=True, timeout=TIMEOUT_OPM_RENDER)
 
 
 def _extract_operator_data(index_path, output_path):
@@ -521,7 +521,7 @@ def _extract_operator_data(index_path, output_path):
 
     cmd = ["jq", "-r", jq_filter]
     with open(index_path, "r") as infile, open(output_path, "w") as outfile:
-        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
+        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True, timeout=60)
 
 
 def _extract_channel_data(index_path, output_path):
@@ -545,7 +545,7 @@ def _extract_channel_data(index_path, output_path):
 
     cmd = ["jq", "-r", jq_filter]
     with open(index_path, "r") as infile, open(output_path, "w") as outfile:
-        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True)
+        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True, timeout=60)
 
 
 def _find_operator_channel(operator_name, channel_path):
