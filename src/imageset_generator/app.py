@@ -168,7 +168,7 @@ def _not_found_response():
     return jsonify({
         'status': 'error',
         'message': 'Resource not found',
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     }), 404
 
 
@@ -293,7 +293,7 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'version': '1.0.0'
     })
 
@@ -315,7 +315,7 @@ def refresh_versions():
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to refresh releases: no versions returned from Cincinnati API',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }), 500
 
         # Save to static file for future use
@@ -325,7 +325,7 @@ def refresh_versions():
                 "releases": releases,
                 "count": len(releases),
                 "source": "cincinnati",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }, f, indent=2)
             f.write("\n")
 
@@ -334,14 +334,14 @@ def refresh_versions():
         return jsonify({
             'status': 'error',
             'message': f'Failed to refresh releases: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
     return jsonify({
         'status': 'success',
         'releases': releases,
         'count': len(releases),
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'source': 'cincinnati'
     })
 
@@ -548,7 +548,7 @@ def _refresh_operators_data(catalog, version):
             "operators": operators,
             "count": len(operators),
             "source": "opm",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }, f, indent=2)
         f.write("\n")
 
@@ -568,7 +568,7 @@ def refresh_ocp_operators(catalog=None, version=None):
         return jsonify({
             'status': 'error',
             'message': 'Catalog parameter is required',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
 
     try:
@@ -576,21 +576,21 @@ def refresh_ocp_operators(catalog=None, version=None):
         return jsonify({
             'status': 'success',
             'data': operators,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     except subprocess.CalledProcessError as e:
         app.logger.error(f"Error processing catalog: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Failed to refresh operators: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
     except Exception as e:
         app.logger.error(f"Error refreshing operators: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Failed to refresh operators: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 @app.route('/api/releases/refresh', methods=['POST'])
@@ -601,7 +601,7 @@ def refresh_ocp_releases(version=None, channel=None):
         return jsonify({
             'status': 'error',
             'message': 'Version and channel parameter is required',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     # Validate version format using centralized validation
@@ -611,7 +611,7 @@ def refresh_ocp_releases(version=None, channel=None):
         return jsonify({
             'status': 'error',
             'message': str(e),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     # Validate channel format using centralized validation
@@ -621,7 +621,7 @@ def refresh_ocp_releases(version=None, channel=None):
         return jsonify({
             'status': 'error',
             'message': str(e),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     channels_releases = {}
@@ -654,7 +654,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 "channel_releases": old_channels_releases,
                 "count": len(old_channels_releases),
                 "source": "cincinnati",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }, f, indent=2)
             f.write("\n")
 
@@ -663,14 +663,14 @@ def refresh_ocp_releases(version=None, channel=None):
         return jsonify({
             'status': 'error',
             'message': f'Failed to refresh releases: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
     return jsonify({
         'status': 'success',
         'channel_releases': channels_releases,
         'count': len(channels_releases),
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'source': 'cincinnati'
     })
 
@@ -707,7 +707,7 @@ def refresh_ocp_channels(version=None):
         return jsonify({
             'status': 'error',
             'message': 'No valid OCP versions found to refresh channels',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
 
 
@@ -739,7 +739,7 @@ def refresh_ocp_channels(version=None):
                 "channels": old_channels,
                 "count": len(old_channels),
                 "source": "cincinnati",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }, f, indent=2)
             f.write("\n")
 
@@ -748,14 +748,14 @@ def refresh_ocp_channels(version=None):
         return jsonify({
             'status': 'error',
             'message': f'Failed to refresh channels: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
     return jsonify({
         'status': 'success',
         'channels': channels,
         'count': len(channels),
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'source': 'cincinnati'
     })
 
@@ -882,7 +882,7 @@ def get_versions():
             'status': 'success',
             'releases': releases,
             'count': len(releases),
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'source': 'static_file'
         })
 
@@ -894,14 +894,14 @@ def get_versions():
             'status': 'success',
             'releases': releases,
             'count': len(releases),
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'source': 'cincinnati'
         })
     else:
         return jsonify({
             'status': 'error',
             'message': 'Failed to fetch releases from Cincinnati API',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 @app.route("/api/releases/<version>/<channel>", methods=["GET"])
@@ -912,14 +912,14 @@ def get_ocp_releases(version, channel):
         return jsonify({
             'status': 'error',
             'message': 'Version parameter is required',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     if channel is None:
         return jsonify({
             'status': 'error',
             'message': 'Channel parameter is required',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     # Validate version format using centralized validation
@@ -929,7 +929,7 @@ def get_ocp_releases(version, channel):
         return jsonify({
             'status': 'error',
             'message': str(e),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     # Validate channel format using centralized validation
@@ -939,7 +939,7 @@ def get_ocp_releases(version, channel):
         return jsonify({
             'status': 'error',
             'message': str(e),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
         
     # Try to load from static file first
@@ -957,7 +957,7 @@ def get_ocp_releases(version, channel):
                 'channel': channel,
                 'releases': channel_releases,
                 'source': 'static_file',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             })
     except Exception as e:
         app.logger.warning(f"Could not load static channel releases file: {e}")
@@ -971,20 +971,20 @@ def get_ocp_releases(version, channel):
                 'version': version,
                 'channel': channel,
                 'releases': release_data.json.get("channel_releases", []),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             })
         else:
             return jsonify({
                 'status': 'error',
                 'message': f'No releases found for version {version} and channel {channel}',
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }), 404
     except Exception as e:
         app.logger.error(f"Error getting OCP releases for version {version} and channel {channel}: {e}")
         return jsonify({
             'status': 'error',
             'message': f'Failed to get OCP releases for version {version} and channel {channel}: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
 def _sort_channels(channel_list, selected_version):
@@ -1017,7 +1017,7 @@ def get_ocp_channels(version):
         return jsonify({
             'status': 'error',
             'message': 'Version parameter is required',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
 
     # Validate version format using centralized validation
@@ -1027,7 +1027,7 @@ def get_ocp_channels(version):
         return jsonify({
             'status': 'error',
             'message': str(e),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
 
     static_file_path = _data_read_file("ocp-channels.json")
@@ -1074,7 +1074,7 @@ def get_ocp_channels(version):
         return jsonify({
             'status': 'error',
             'message': f'Failed to get OCP channels for version {version}: {str(e)}',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
         
 
@@ -1610,7 +1610,7 @@ def generate_preview():
         return jsonify({
             'success': True,
             'yaml': yaml_content,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -1846,13 +1846,13 @@ def refresh_all_static_data():
         return jsonify({
             "status": "error",
             "message": f"Error refreshing static data: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }), 500
 
     return jsonify({
         "status": "success",
         "message": "All static data refreshed",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     })
 
 
@@ -1892,19 +1892,19 @@ def get_ocp_versions_static():
                     "available_versions": data.get("releases", []),
                     "count": data.get("count", 0),
                     "source": data.get("source", "static_file"),
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
         else:
             return jsonify({
                 "status": "error", 
                 "message": "Static OCP versions file not found",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }), 404
     except Exception as e:
         return jsonify({
             "status": "error",
             "message": f"Error reading OCP versions: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }), 500
 
 

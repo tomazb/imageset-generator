@@ -115,7 +115,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 
 #### 1.9 Quality & CI/CD
 - **Status**: Implemented
-- 46 passing tests (unit + smoke)
+- 83 passing tests (unit + smoke)
 - CI workflows: tests (Python 3.10-3.13), security scanning (Bandit, Safety, CodeQL, Trivy), container builds, quality checks (linting, complexity, types), dependency updates
 
 ---
@@ -322,7 +322,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 ### Source Structure
 ```
 src/imageset_generator/
-  app.py              # Flask REST API (~1,600 LOC)
+  app.py              # Flask REST API (~1,900 LOC)
   generator.py        # YAML generation core (~370 LOC)
   constants.py        # Centralized config (~180 LOC)
   validation.py       # Input validation (~170 LOC)

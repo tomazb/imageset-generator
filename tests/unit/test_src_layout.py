@@ -194,6 +194,24 @@ def test_get_operator_catalogs_fallback_uses_correct_key(monkeypatch, tmp_path):
     assert isinstance(payload["catalogs"], list)
 
 
+def test_api_timestamps_are_timezone_aware(monkeypatch):
+    """All API responses must use timezone-aware UTC timestamps."""
+    app.testing = True
+    client = app.test_client()
+
+    # Use packaged seed data so we get a response without network calls
+    from imageset_generator.constants import get_packaged_data_path
+    monkeypatch.setattr(
+        "imageset_generator.app._data_read_file",
+        get_packaged_data_path,
+    )
+
+    response = client.get("/api/ocp-versions")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert "+00:00" in payload["timestamp"], f"Timestamp missing timezone: {payload['timestamp']}"
+
+
 def test_generate_preview_rejects_invalid_catalog_url():
     """Generation endpoints must reject catalog URLs outside the registry.redhat.io allowlist."""
     app.testing = True

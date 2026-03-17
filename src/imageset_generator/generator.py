@@ -16,7 +16,7 @@ import argparse
 import yaml
 import json
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 import os
 import re
@@ -33,7 +33,7 @@ class ImageSetGenerator:
                 "name": "openshift-imageset",
                 "labels": {
                     "generated-by": "imageset-generator",
-                    "generated-at": datetime.now().isoformat()
+                    "generated-at": datetime.now(timezone.utc).isoformat()
                 }
             },
             "spec": {
