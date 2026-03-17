@@ -83,6 +83,24 @@ class TestDiscoverOcpVersions:
 
         assert result == []
 
+    @patch("imageset_generator.discovery._query_cincinnati")
+    def test_finds_version_on_candidate_only(self, mock_query):
+        """A version only on candidate (not stable) should still be discovered."""
+        def side_effect(channel, arch="amd64"):
+            # 4.19 only exists on candidate, not stable/fast/eus
+            if channel == "candidate-4.19":
+                return {"nodes": [{"version": "4.19.0"}]}
+            if channel == "stable-4.16":
+                return {"nodes": [{"version": "4.16.0"}]}
+            return None
+
+        mock_query.side_effect = side_effect
+
+        result = discover_ocp_versions()
+
+        assert "4.16" in result
+        assert "4.19" in result
+
 
 class TestDiscoverChannelsForVersion:
     @patch("imageset_generator.discovery._query_cincinnati")

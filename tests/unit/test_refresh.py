@@ -299,3 +299,44 @@ def test_channels_endpoint_returns_sorted_channels(client, tmp_path):
         "candidate-4.21",
         "candidate-4.22",
     ]
+
+
+def test_get_catalogs_patch_version_normalizes_to_major_minor(client, tmp_path):
+    """GET /api/operators/catalogs/4.17.9 should find catalogs keyed by 4.17."""
+
+    class OkProcess:
+        returncode = 0
+        stdout = "{}"
+        stderr = ""
+
+    with patch("imageset_generator.app._data_read_file",
+               return_value=tmp_path / "nonexistent" / "catalogs.json"), \
+         patch("imageset_generator.app._data_write_file",
+               return_value=tmp_path / "catalogs.json"), \
+         patch("imageset_generator.app.subprocess.run", return_value=OkProcess()):
+
+        response = client.get("/api/operators/catalogs/4.17.9")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert isinstance(payload["catalogs"], list)
+
+
+@patch("imageset_generator.app._data_read_file")
+def test_get_ocp_versions_static_reads_arch_scoped_file(mock_read, client, tmp_path):
+    """GET /api/ocp-versions?arch=arm64 should read ocp-versions-arm64.json."""
+    cache_file = tmp_path / "ocp-versions-arm64.json"
+    cache_file.write_text(json.dumps({
+        "releases": ["4.16", "4.17"],
+        "count": 2,
+        "source": "cincinnati"
+    }))
+    mock_read.return_value = cache_file
+
+    response = client.get("/api/ocp-versions?arch=arm64")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["releases"] == ["4.16", "4.17"]
+    mock_read.assert_called_once_with("ocp-versions-arm64.json")
