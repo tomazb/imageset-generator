@@ -1934,7 +1934,8 @@ def internal_error(error):
 def get_ocp_versions_static():
     """Get OCP versions from static file"""
     try:
-        static_file_path = _data_read_file("ocp-versions.json")
+        arch = request.args.get('arch', 'amd64')
+        static_file_path = _data_read_file(_arch_scoped_filename("ocp-versions.json", arch))
         if static_file_path.exists():
             with open(static_file_path, "r") as f:
                 data = json.load(f)
