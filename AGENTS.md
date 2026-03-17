@@ -26,20 +26,27 @@ imageset-generator/
 │   ├── __init__.py              # Package exports
 │   ├── app.py                   # Flask API backend (main entry)
 │   ├── generator.py             # ImageSetGenerator class
+│   ├── discovery.py             # Cincinnati API client
 │   ├── constants.py             # Configuration constants
 │   ├── validation.py            # Input validation functions
 │   ├── exceptions.py            # Custom exception classes
-│   └── cli/                     # CLI/GUI subpackage
-│       ├── __init__.py
-│       ├── launcher.py          # CLI entry point
-│       └── gui.py               # Tkinter GUI
+│   ├── cli/                     # CLI/GUI subpackage
+│   │   ├── __init__.py
+│   │   ├── launcher.py          # CLI entry point
+│   │   └── gui.py               # Tkinter GUI
+│   ├── automation/              # Kubernetes automation subpackage
+│   │   ├── api.py               # Automation API endpoints
+│   │   ├── engine.py            # Orchestration engine
+│   │   ├── scheduler.py         # Cron scheduling
+│   │   ├── k8s_manager.py       # Kubernetes job management
+│   │   ├── notifier.py          # Notifications (email, Slack)
+│   │   └── config.yaml          # Automation configuration
+│   ├── data/*.json              # Bundled seed data (33 files)
+│   └── frontend/build/          # Compiled React UI
 │
-├── automation/                  # Kubernetes automation module
-│   ├── api.py                   # Automation API endpoints
-│   ├── engine.py                # Orchestration engine
-│   ├── scheduler.py             # Cron scheduling
-│   ├── k8s_manager.py           # Kubernetes job management
-│   ├── notifier.py              # Notifications (email, Slack)
+├── automation/                  # Automation documentation & examples
+│   ├── README.md                # Automation module guide
+│   ├── QUICKSTART.md            # Quick-start guide
 │   └── examples/                # K8s manifest examples
 │
 ├── frontend/                    # React frontend
@@ -63,10 +70,8 @@ imageset-generator/
 │   ├── review/                  # Code review notes
 │   └── images/                  # Documentation screenshots
 │
-├── data/                        # Cached data (JSON files)
-│   ├── catalogs-*.json          # Catalog info per OCP version
-│   ├── operators-*.json         # Operator data per catalog
-│   └── ocp-*.json               # OCP version/channel data
+├── data/                        # Runtime cache (gitignored, empty on checkout)
+│                                # Populated by /api/*/refresh endpoints
 │
 └── examples/                    # Sample configurations
     ├── imageset-config.yaml     # Example output
@@ -78,6 +83,7 @@ imageset-generator/
 ```
 app.py
   ├── generator.py (ImageSetGenerator)
+  ├── discovery.py (discover_ocp_versions, discover_channels, etc.)
   ├── constants.py (TLS_VERIFY, timeouts, catalogs)
   ├── validation.py (validate_version, validate_channel, etc.)
   ├── exceptions.py (CatalogError, OperatorError, etc.)
@@ -222,7 +228,7 @@ podman-compose up imageset-generator
 
 ## Known Issues and TODOs
 
-1. **app.py is large** (~1900 lines) - Consider refactoring into Flask blueprints
+1. **app.py is large** (~2500 lines) - Consider refactoring into Flask blueprints
 2. **CI workflows need updates** - GitHub Actions reference old file paths
 3. **Some inline validation remains** - Parsing patterns in output processing (intentional)
 
