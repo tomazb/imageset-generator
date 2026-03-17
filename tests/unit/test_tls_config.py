@@ -69,6 +69,75 @@ def test_build_opm_command_yaml_output():
     
     print("✓ Test passed: YAML output format (default) configured correctly")
 
+def test_discovery_session_honors_tls_verify_true():
+    """When TLS_VERIFY is True, the discovery session should verify certificates."""
+    from unittest.mock import patch
+    import imageset_generator.discovery as discovery
+
+    old_session = discovery._session
+    try:
+        discovery._session = None  # Force re-creation
+        with patch.object(discovery, "TLS_VERIFY", True):
+            session = discovery._get_session()
+            assert session.verify is True
+    finally:
+        discovery._session = old_session
+
+
+def test_discovery_session_honors_tls_verify_false():
+    """When TLS_VERIFY is False, the discovery session should skip verification."""
+    from unittest.mock import patch
+    import imageset_generator.discovery as discovery
+
+    old_session = discovery._session
+    try:
+        discovery._session = None  # Force re-creation
+        with patch.object(discovery, "TLS_VERIFY", False):
+            session = discovery._get_session()
+            assert session.verify is False
+    finally:
+        discovery._session = old_session
+
+
+def test_build_skopeo_command_default():
+    """Test that build_skopeo_command uses TLS_VERIFY constant by default"""
+    from imageset_generator.app import build_skopeo_command
+    from imageset_generator.constants import TLS_VERIFY
+
+    cmd = build_skopeo_command('inspect', 'docker://registry.redhat.io/redhat/redhat-operator-index:v4.18')
+
+    if TLS_VERIFY:
+        assert '--tls-verify=false' not in cmd
+    else:
+        assert '--tls-verify=false' in cmd
+
+    assert cmd[0] == 'skopeo'
+    assert cmd[1] == 'inspect'
+
+
+def test_build_skopeo_command_explicit_skip_tls():
+    """Test explicit skip_tls parameter overrides"""
+    from imageset_generator.app import build_skopeo_command
+
+    cmd = build_skopeo_command('list-tags', 'docker://registry.redhat.io/redhat/redhat-operator-index', skip_tls=True)
+    assert '--tls-verify=false' in cmd
+
+    cmd = build_skopeo_command('list-tags', 'docker://registry.redhat.io/redhat/redhat-operator-index', skip_tls=False)
+    assert '--tls-verify=false' not in cmd
+
+
+def test_build_skopeo_command_extra_args():
+    """Test that extra_args are placed before the image reference"""
+    from imageset_generator.app import build_skopeo_command
+
+    cmd = build_skopeo_command('inspect', 'docker://registry.redhat.io/redhat/redhat-operator-index:v4.18', extra_args=['--no-tags'])
+
+    assert '--no-tags' in cmd
+    no_tags_idx = cmd.index('--no-tags')
+    ref_idx = cmd.index('docker://registry.redhat.io/redhat/redhat-operator-index:v4.18')
+    assert no_tags_idx < ref_idx, "extra_args should appear before the image reference"
+
+
 def test_tls_verify_constant_default():
     """Test that TLS_VERIFY constant defaults to True (secure by default)"""
     from imageset_generator.constants import TLS_VERIFY

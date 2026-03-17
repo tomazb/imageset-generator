@@ -15,6 +15,7 @@ from .constants import (
     CINCINNATI_CHANNEL_PREFIXES,
     OCP_MINOR_PROBE_RANGE,
     TIMEOUT_CINCINNATI,
+    TLS_VERIFY,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ def _get_session() -> requests.Session:
     global _session
     if _session is None:
         _session = requests.Session()
+        _session.verify = TLS_VERIFY
         _session.headers.update({
             "Accept": "application/json",
         })

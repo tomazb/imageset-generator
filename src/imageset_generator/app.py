@@ -76,6 +76,34 @@ def build_opm_command(catalog_url, output_format='yaml', skip_tls=None):
     cmd.append(catalog_url)
     return cmd
 
+def build_skopeo_command(subcommand, image_ref, skip_tls=None, extra_args=None):
+    """
+    Build skopeo command with configurable TLS verification.
+
+    Args:
+        subcommand: skopeo subcommand (e.g., 'inspect', 'list-tags')
+        image_ref: Image reference (e.g., 'docker://registry.redhat.io/redhat/redhat-operator-index:v4.18')
+        skip_tls: Override TLS verification (None uses TLS_VERIFY constant from constants.py)
+        extra_args: Additional arguments to pass before the image reference
+
+    Returns:
+        List of command arguments for subprocess
+    """
+    cmd = ['skopeo', subcommand]
+
+    # Use provided skip_tls value, or default to TLS_VERIFY constant
+    should_skip_tls = skip_tls if skip_tls is not None else not TLS_VERIFY
+
+    if should_skip_tls:
+        cmd.append('--tls-verify=false')
+
+    if extra_args:
+        cmd.extend(extra_args)
+
+    cmd.append(image_ref)
+    return cmd
+
+
 def process_operator_data(operator):
     """Process operator data to handle selected versions and other parameters"""
     if isinstance(operator, str):
@@ -180,6 +208,22 @@ def _data_read_file(filename: str) -> Path:
 def _data_write_file(filename: str) -> Path:
     """Return the cache file to write, creating the runtime cache dir."""
     return get_data_write_path(filename)
+
+
+def _arch_scoped_filename(base_filename: str, arch: str) -> str:
+    """Return an architecture-scoped cache filename.
+
+    For the default architecture (amd64), returns the original filename
+    so that bundled seed data continues to work.  For any other
+    architecture the arch is inserted before the extension, e.g.
+    ``ocp-versions.json`` becomes ``ocp-versions-arm64.json``.
+    """
+    if arch == "amd64":
+        return base_filename
+    stem, dot, ext = base_filename.rpartition(".")
+    if not dot:
+        return f"{base_filename}-{arch}"
+    return f"{stem}-{arch}.{ext}"
 
 def get_operators_from_opm(catalog_url, version_key):
     """Get operators from a catalog using opm render"""
@@ -303,12 +347,12 @@ def refresh_versions():
     # Logic to refresh the releases via Cincinnati API
     app.logger.debug("Refreshing OCP releases...")
     releases = []
-    static_file_path = _data_write_file("ocp-versions.json")
-    
+    arch = request.args.get('arch', 'amd64')
+    static_file_path = _data_write_file(_arch_scoped_filename("ocp-versions.json", arch))
     try:
         # Query Cincinnati API for available OCP versions
         app.logger.debug("Querying Cincinnati API to refresh releases...")
-        releases = discover_ocp_versions()
+        releases = discover_ocp_versions(arch=arch)
 
         if not releases:
             app.logger.error("Cincinnati API returned no versions")
@@ -625,11 +669,12 @@ def refresh_ocp_releases(version=None, channel=None):
         }), 400
         
     channels_releases = {}
-    static_file_path = _data_write_file("channel-releases.json")
+    arch = request.args.get('arch', 'amd64')
+    static_file_path = _data_write_file(_arch_scoped_filename("channel-releases.json", arch))
     try:
         # Query Cincinnati API for channel releases
         app.logger.debug(f"Querying Cincinnati API for releases in channel {channel}...")
-        release_list = discover_channel_releases(channel)
+        release_list = discover_channel_releases(channel, arch=arch)
 
         if release_list:
             channels_releases[channel] = release_list
@@ -679,8 +724,12 @@ def refresh_ocp_channels(version=None):
     """Refresh the list of available OCP channels for each version"""
     app.logger.debug("Refreshing OCP channels...")
     channels = {}
-    
-    static_file_path = _data_write_file("ocp-channels.json")
+
+    arch = request.args.get('arch', 'amd64')
+    # When called as a route, version comes from query params
+    if version is None:
+        version = request.args.get('version')
+    static_file_path = _data_write_file(_arch_scoped_filename("ocp-channels.json", arch))
     version_list = []
     # Use Version if provided, or get available versions if not provided
     if version:
@@ -690,9 +739,9 @@ def refresh_ocp_channels(version=None):
         app.logger.debug("Fetching channels for all available versions")
         try:
         # Try to load from static file first
-            static_file_path = _data_read_file("ocp-versions.json")
-            if static_file_path.exists():
-                with open(static_file_path, 'r') as f:
+            versions_file_path = _data_read_file(_arch_scoped_filename("ocp-versions.json", arch))
+            if versions_file_path.exists():
+                with open(versions_file_path, 'r') as f:
                     data = json.load(f)
                     releases = data.get("releases", [])
                     app.logger.debug(f"Loaded {len(releases)} releases from static file")
@@ -714,7 +763,7 @@ def refresh_ocp_channels(version=None):
     try:
         for version in version_list:
             app.logger.debug(f"Querying Cincinnati API for channels for version {version}...")
-            found_channels = discover_channels_for_version(version)
+            found_channels = discover_channels_for_version(version, arch=arch)
             if found_channels:
                 channels[version] = found_channels
 
@@ -806,7 +855,7 @@ def refresh_catalogs_for_version(version=None):
                     validated = False
                     try:
                         result = subprocess.run(
-                            ['skopeo', 'inspect', '--no-tags', f'docker://{catalog_url}'],
+                            build_skopeo_command('inspect', f'docker://{catalog_url}', extra_args=['--no-tags']),
                             capture_output=True, text=True, timeout=TIMEOUT_SKOPEO,
                         )
                         validated = result.returncode == 0
@@ -860,11 +909,11 @@ def get_versions():
     # Get available OCP releases using static files or Cincinnati API
     app.logger.debug("Fetching OCP releases...")
     releases = []
+    arch = request.args.get('arch', 'amd64')
 
-  
     try:
         # Try to load from static file first
-        static_file_path = _data_read_file("ocp-versions.json")
+        static_file_path = _data_read_file(_arch_scoped_filename("ocp-versions.json", arch))
         if static_file_path.exists():
             with open(static_file_path, 'r') as f:
                 data = json.load(f)
@@ -943,8 +992,9 @@ def get_ocp_releases(version, channel):
         }), 400
         
     # Try to load from static file first
+    arch = request.args.get('arch', 'amd64')
     app.logger.debug(f"Checking static file for releases for version {version} and channel {channel}")
-    static_file_path = _data_read_file("channel-releases.json")
+    static_file_path = _data_read_file(_arch_scoped_filename("channel-releases.json", arch))
 
     try:
         with open(static_file_path, 'r') as f:
@@ -1030,7 +1080,8 @@ def get_ocp_channels(version):
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 400
 
-    static_file_path = _data_read_file("ocp-channels.json")
+    arch = request.args.get('arch', 'amd64')
+    static_file_path = _data_read_file(_arch_scoped_filename("ocp-channels.json", arch))
 
     # Try to load from static file first
     try:
@@ -1177,7 +1228,7 @@ def get_available_catalogs():
 
         for catalog in BASE_CATALOGS:
             try:
-                cmd = ['skopeo', 'list-tags', f'docker://{catalog["base_url"]}']
+                cmd = build_skopeo_command('list-tags', f'docker://{catalog["base_url"]}')
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
