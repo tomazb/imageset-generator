@@ -1149,8 +1149,9 @@ def get_operator_catalogs(version):
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
-    # Save the catalogs
-    available_catalogs = catalogs.json.get("data", [])
+    # Extract the catalog list for this version from the version-keyed dict
+    all_catalogs = catalogs.json.get("catalogs", {})
+    available_catalogs = all_catalogs.get(version, []) if isinstance(all_catalogs, dict) else all_catalogs
     if not available_catalogs:
         app.logger.warning(f"No catalogs found for version {version}")
         return jsonify({

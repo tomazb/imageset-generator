@@ -158,6 +158,42 @@ def test_version_refresh_excludes_unvalidated_catalogs(monkeypatch):
     assert call_count["n"] == len(BASE_CATALOGS)
 
 
+def test_get_operator_catalogs_fallback_uses_correct_key(monkeypatch, tmp_path):
+    """get_operator_catalogs must extract catalogs from the version-keyed refresh response."""
+    app.testing = True
+    client = app.test_client()
+
+    # Make static file not exist so we hit the refresh fallback
+    monkeypatch.setattr(
+        "imageset_generator.app._data_read_file",
+        lambda filename: tmp_path / "nonexistent" / filename,
+    )
+
+    class OkProcess:
+        returncode = 0
+        stdout = "{}"
+        stderr = ""
+
+    def fake_run(cmd, capture_output, text, timeout):
+        return OkProcess()
+
+    monkeypatch.setattr("imageset_generator.app.subprocess.run", fake_run)
+
+    # Mock _data_write_file to avoid writing to real data dir
+    monkeypatch.setattr(
+        "imageset_generator.app._data_write_file",
+        lambda filename: tmp_path / filename,
+    )
+
+    response = client.get("/api/operators/catalogs/4.17")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    # Should be a list, not a version-keyed dict
+    assert isinstance(payload["catalogs"], list)
+
+
 def test_packaged_automation_modules_import():
     from imageset_generator.automation.engine import AutomationEngine, load_config
     from imageset_generator.automation.scheduler import AutomationScheduler
