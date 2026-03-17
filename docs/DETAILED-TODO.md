@@ -1,5 +1,10 @@
 # ImageSet Generator Refactoring Plan (Pragmatic Approach)
 
+> **Status: Archived** — Most items in this plan have been completed and shipped in v1.0.0.
+> See [CHANGELOG.md](../../CHANGELOG.md) for what was implemented (validation.py, constants.py,
+> exceptions.py, build_opm_command(), refresh_ocp_operators refactoring, TLS configuration, etc.).
+> This document is retained for historical reference only.
+
 **Created:** October 30, 2025  
 **Approach:** Incremental refactoring without framework changes or over-engineering  
 **Goal:** Improve code quality and maintainability while keeping Flask and current architecture
