@@ -1,3 +1,6 @@
+# Runtime cache (written by API refresh endpoints)
+/data/
+
 # Large files and archives
 *.tar.gz
 *.zip

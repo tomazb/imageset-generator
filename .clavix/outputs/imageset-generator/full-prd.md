@@ -61,7 +61,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 - Search and filter operators across all 4 catalogs
 - Smart operator name mapping (18+ aliases, e.g., "logging" -> "cluster-logging")
 - Version-specific operator listings with channel information
-- Cached catalog data with manual refresh capability (via `opm render`); catalog discovery also uses `opm render` (replacing `oc-mirror list operators`)
+- Cached catalog data with manual refresh capability (via `opm render`); catalog discovery uses `opm render`
 
 #### 1.3 Web User Interface
 - **Status**: Implemented
@@ -115,7 +115,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 
 #### 1.9 Quality & CI/CD
 - **Status**: Implemented
-- 83 passing tests (unit + smoke)
+- 98 tests (unit + smoke), 97 passing
 - CI workflows: tests (Python 3.10-3.13), security scanning (Bandit, Safety, CodeQL, Trivy), container builds, quality checks (linting, complexity, types), dependency updates
 
 ---
@@ -187,6 +187,28 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 - Configurable schedules, version strategies, K8s resources, notification channels
 - Environment variable overrides for sensitive values (credentials, tokens)
 
+#### 2.9 Mirror Destination Modes
+- **Status**: Not started
+- Registry-to-registry mirroring (`docker://` destinations) — direct push to disconnected registry
+- Archive-based mirroring (`file://` destinations) — current archive workflow
+- Enclave mode (`oc-mirror --v2 copy enclave`) — two-phase workflow: prepare archive on connected side, apply on air-gapped side
+- Custom CA certificate support for internal registries (`--source-tls-verify`, `--dest-tls-verify`, custom CA bundles)
+- Destination mode selection in UI and CLI
+
+#### 2.10 Registry Cleanup & Pruning
+- **Status**: Not started
+- `oc-mirror --v2 delete` support for removing unused images from target registry
+- Generate delete configurations based on drift detection (ties into 2.1 inventory tracking)
+- Prune stale operator versions after catalog updates
+- Dry-run mode for delete operations
+
+#### 2.11 Incremental Mirroring via v2 Workspace
+- **Status**: Not started
+- Leverage oc-mirror v2 workspace directory for stateful incremental updates
+- Track mirrored state across runs (workspace persistence via PVC)
+- Generate diff reports: what will be added/updated in next mirror run
+- Workspace backup and recovery
+
 ---
 
 ### v2.0 - Multi-Cluster & Autonomous Operations (Future)
@@ -250,6 +272,8 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 - **Persistent storage**: Database or structured file store for artifact inventory and mirror history
 - **Background task management**: Robust job queue for long-running mirror operations
 - **Incremental diff engine**: Compare current vs desired state to generate minimal ImageSetConfigurations
+- **oc-mirror v2 workspace management**: Persistent workspace directory for incremental mirroring state
+- **CA certificate management**: Custom CA bundle injection for internal registry TLS
 
 ### New Technical Needs (v2.0)
 - **Multi-tenancy in configuration**: Per-registry/cluster config management
@@ -314,6 +338,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 | Automation runs unattended with wrong config | Mirrors wrong content to production registry | Dry-run mode default, concurrent job prevention, version change detection, notifications |
 | Large mirrors overwhelm storage/network | Failed jobs, partial mirrors | Archive size limits, bandwidth-aware scheduling (v2.0), progress monitoring |
 | Multi-registry complexity | Configuration errors across environments | Policy validation, per-registry health checks, audit trail |
+| `--v2` flag becomes optional or removed in future oc-mirror releases | Command invocations break | Configurable oc-mirror flags in automation config; CI smoke tests against latest oc-mirror image |
 
 ---
 
@@ -322,7 +347,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 ### Source Structure
 ```
 src/imageset_generator/
-  app.py              # Flask REST API (~1,900 LOC)
+  app.py              # Flask REST API (~1,975 LOC)
   generator.py        # YAML generation core (~370 LOC)
   constants.py        # Centralized config (~180 LOC)
   validation.py       # Input validation (~170 LOC)
@@ -331,7 +356,7 @@ src/imageset_generator/
   automation/         # Scheduler, K8s manager, notifier, API blueprint
   data/               # 50+ JSON seed files (seed data covers OCP 4.16-4.21; runtime supports any version)
 frontend/src/         # React application (8 components)
-tests/                # 46 tests (unit + smoke)
+tests/                # 98 tests (unit + smoke)
 ```
 
 ### Automation Module Status
@@ -342,6 +367,23 @@ The `automation/` module contains scaffolding for the full automation pipeline b
 - `notifier.py` - Email/Slack/webhook (exists, needs integration testing)
 - `api.py` - REST endpoints for automation (exists, needs auth and validation)
 - `config.yaml` - Configuration template (exists, comprehensive)
+
+---
+
+## Refinement History
+
+### 2026-03-17 — Full oc-mirror v2 support
+
+**Changes:**
+- [MODIFIED] 1.2: Removed v1 migration framing from operator discovery description ("replacing oc-mirror list operators")
+- [ADDED] 2.9: Mirror Destination Modes — registry-to-registry, archive, enclave mode, custom CA certs
+- [ADDED] 2.10: Registry Cleanup & Pruning — `oc-mirror --v2 delete`, drift-based cleanup, dry-run
+- [ADDED] 2.11: Incremental Mirroring via v2 Workspace — stateful updates, diff reports, workspace persistence
+- [ADDED] Technical Requirements: oc-mirror v2 workspace management, CA certificate management
+- [ADDED] Risk: `--v2` flag lifecycle transition
+- [UNCHANGED] v2alpha1 API version (still current), `--v2` flag (still mandatory)
+
+**Why:** Align PRD with full oc-mirror v2 capabilities beyond config generation — covering mirror execution modes, registry cleanup, and incremental mirroring that platform engineers need for production workflows.
 
 ---
 
