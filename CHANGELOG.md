@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Containerfile**: Pinned `setuptools>=68` (matching `pyproject.toml` build-system requires) before `--no-build-isolation` package install
 - **Containerfile**: Removed `curl` from `microdnf install` to resolve conflict with `curl-minimal` already present in `ubi9/ubi-minimal`
 
+## [1.0.0] - 2026-01-12
+
 ### Added
 
 #### Security & Input Validation (2025-10-28)
