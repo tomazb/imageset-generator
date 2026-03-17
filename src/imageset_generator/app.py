@@ -35,7 +35,7 @@ from .discovery import (
     discover_channels_for_version,
     discover_channel_releases,
 )
-from .validation import validate_version, validate_channel, safe_path_component, ValidationError
+from .validation import validate_version, validate_channel, validate_catalog_url, safe_path_component, ValidationError
 from .exceptions import (
     ImageSetGeneratorError,
     CatalogError,
@@ -1567,6 +1567,10 @@ def generate_preview():
 
                 # Group by catalog
                 catalog = op_data["catalog"] or 'registry.redhat.io/redhat/redhat-operator-index'
+                try:
+                    validate_catalog_url(catalog)
+                except ValidationError:
+                    return jsonify({'error': f'Invalid catalog URL: {catalog}'}), 400
                 catalog_to_operators.setdefault(catalog, []).append(op_entry)
             # Add operators for each catalog, passing full operator dicts
             ocp_version = data.get('ocp_versions', [None])[0] or data.get('ocp_min_version') or data.get('ocp_max_version')
@@ -1693,8 +1697,12 @@ def generate_download():
                         catalog_to_operators.setdefault('registry.redhat.io/redhat/redhat-operator-index', []).append(op_entry)
             ocp_version = data.get('ocp_versions', [None])[0] or data.get('ocp_min_version') or data.get('ocp_max_version')
             for catalog, ops in catalog_to_operators.items():
+                try:
+                    validate_catalog_url(catalog)
+                except ValidationError:
+                    return jsonify({'error': f'Invalid catalog URL: {catalog}'}), 400
                 generator.add_operators(ops, catalog, channels, ocp_version=ocp_version)
-        
+
         # Add additional images
         if data.get('additional_images'):
             images = []

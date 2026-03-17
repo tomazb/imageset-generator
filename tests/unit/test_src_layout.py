@@ -194,6 +194,38 @@ def test_get_operator_catalogs_fallback_uses_correct_key(monkeypatch, tmp_path):
     assert isinstance(payload["catalogs"], list)
 
 
+def test_generate_preview_rejects_invalid_catalog_url():
+    """Generation endpoints must reject catalog URLs outside the registry.redhat.io allowlist."""
+    app.testing = True
+    client = app.test_client()
+
+    response = client.post("/api/generate/preview", json={
+        "operators": [
+            {"name": "test-operator", "catalog": "evil.registry.io/malicious/index"}
+        ],
+    })
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "Invalid catalog URL" in payload["error"]
+
+
+def test_generate_preview_accepts_valid_catalog_url():
+    """Generation endpoints must accept registry.redhat.io catalog URLs."""
+    app.testing = True
+    client = app.test_client()
+
+    response = client.post("/api/generate/preview", json={
+        "operators": [
+            {"name": "test-operator", "catalog": "registry.redhat.io/redhat/redhat-operator-index"}
+        ],
+    })
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload.get("success") is True
+
+
 def test_packaged_automation_modules_import():
     from imageset_generator.automation.engine import AutomationEngine, load_config
     from imageset_generator.automation.scheduler import AutomationScheduler
