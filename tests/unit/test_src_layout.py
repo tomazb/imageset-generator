@@ -1,8 +1,8 @@
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 from imageset_generator.app import app
 from imageset_generator.constants import BASE_CATALOGS, PACKAGE_ROOT
@@ -17,13 +17,16 @@ def test_packaged_frontend_build_contains_static_assets():
     assert (PACKAGE_ROOT / "frontend" / "build" / "static").is_dir()
 
 
-def test_ocp_versions_endpoint_uses_packaged_seed_data_outside_repo_root(monkeypatch, tmp_path):
+def test_ocp_versions_endpoint_uses_packaged_seed_data_outside_repo_root(
+    monkeypatch, tmp_path
+):
     monkeypatch.chdir(tmp_path)
 
     # Force the read path to the packaged seed data so the runtime cache
     # (which differs in a checkout) is bypassed — this simulates running
     # from an installed wheel where no repo-level data/ directory exists.
     from imageset_generator.constants import get_packaged_data_path
+
     monkeypatch.setattr(
         "imageset_generator.app._data_read_file",
         get_packaged_data_path,
@@ -36,7 +39,9 @@ def test_ocp_versions_endpoint_uses_packaged_seed_data_outside_repo_root(monkeyp
 
     assert response.status_code == 200
     payload = response.get_json()
-    packaged_payload = json.loads((PACKAGE_ROOT / "data" / "ocp-versions.json").read_text())
+    packaged_payload = json.loads(
+        (PACKAGE_ROOT / "data" / "ocp-versions.json").read_text()
+    )
     assert payload["status"] == "success"
     assert payload["releases"] == packaged_payload["releases"]
 
@@ -60,6 +65,7 @@ def test_checkout_mode_resolves_project_root_to_repo_root():
         text=True,
         env=env,
         cwd=project_root,
+        timeout=30,
     )
 
     assert result.returncode == 0, result.stderr
@@ -108,11 +114,30 @@ def test_version_catalog_list_filters_unvalidated_from_cache(monkeypatch, tmp_pa
     app.testing = True
     client = app.test_client()
 
-    cached = {"4.17": [
-        {"name": "good", "url": "reg/good:v4.17", "description": "ok", "default": True, "validated": True},
-        {"name": "bad", "url": "reg/bad:v4.17", "description": "nope", "default": False, "validated": False},
-        {"name": "missing", "url": "reg/missing:v4.17", "description": "no key", "default": False},
-    ]}
+    cached = {
+        "4.17": [
+            {
+                "name": "good",
+                "url": "reg/good:v4.17",
+                "description": "ok",
+                "default": True,
+                "validated": True,
+            },
+            {
+                "name": "bad",
+                "url": "reg/bad:v4.17",
+                "description": "nope",
+                "default": False,
+                "validated": False,
+            },
+            {
+                "name": "missing",
+                "url": "reg/missing:v4.17",
+                "description": "no key",
+                "default": False,
+            },
+        ]
+    }
 
     cache_file = tmp_path / "catalogs-4.17.json"
     cache_file.write_text(json.dumps(cached))
@@ -201,6 +226,7 @@ def test_api_timestamps_are_timezone_aware(monkeypatch):
 
     # Use packaged seed data so we get a response without network calls
     from imageset_generator.constants import get_packaged_data_path
+
     monkeypatch.setattr(
         "imageset_generator.app._data_read_file",
         get_packaged_data_path,
@@ -209,7 +235,9 @@ def test_api_timestamps_are_timezone_aware(monkeypatch):
     response = client.get("/api/ocp-versions")
     assert response.status_code == 200
     payload = response.get_json()
-    assert "+00:00" in payload["timestamp"], f"Timestamp missing timezone: {payload['timestamp']}"
+    assert (
+        "+00:00" in payload["timestamp"]
+    ), f"Timestamp missing timezone: {payload['timestamp']}"
 
 
 def test_generate_preview_rejects_invalid_catalog_url():
@@ -217,11 +245,14 @@ def test_generate_preview_rejects_invalid_catalog_url():
     app.testing = True
     client = app.test_client()
 
-    response = client.post("/api/generate/preview", json={
-        "operators": [
-            {"name": "test-operator", "catalog": "evil.registry.io/malicious/index"}
-        ],
-    })
+    response = client.post(
+        "/api/generate/preview",
+        json={
+            "operators": [
+                {"name": "test-operator", "catalog": "evil.registry.io/malicious/index"}
+            ],
+        },
+    )
 
     assert response.status_code == 400
     payload = response.get_json()
@@ -233,11 +264,17 @@ def test_generate_preview_accepts_valid_catalog_url():
     app.testing = True
     client = app.test_client()
 
-    response = client.post("/api/generate/preview", json={
-        "operators": [
-            {"name": "test-operator", "catalog": "registry.redhat.io/redhat/redhat-operator-index"}
-        ],
-    })
+    response = client.post(
+        "/api/generate/preview",
+        json={
+            "operators": [
+                {
+                    "name": "test-operator",
+                    "catalog": "registry.redhat.io/redhat/redhat-operator-index",
+                }
+            ],
+        },
+    )
 
     assert response.status_code == 200
     payload = response.get_json()

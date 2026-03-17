@@ -44,8 +44,13 @@ def test_generator_smoke_builds_expected_config():
     assert package["channels"] == [{"name": "stable-5.8"}]
 
     yaml_output = generator.generate_yaml()
-    body = yaml.safe_load("\n".join(line for line in yaml_output.splitlines() if not line.startswith("#")))
-    assert body["mirror"]["additionalImages"][0]["name"] == "registry.redhat.io/ubi8/ubi:latest"
+    body = yaml.safe_load(
+        "\n".join(line for line in yaml_output.splitlines() if not line.startswith("#"))
+    )
+    assert (
+        body["mirror"]["additionalImages"][0]["name"]
+        == "registry.redhat.io/ubi8/ubi:latest"
+    )
 
 
 def test_generator_uses_operator_channel_when_mapping_missing():

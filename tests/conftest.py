@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-
 # Add src directory to path so tests can import from imageset_generator package
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"

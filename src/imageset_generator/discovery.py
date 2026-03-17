@@ -29,9 +29,11 @@ def _get_session() -> requests.Session:
     if _session is None:
         _session = requests.Session()
         _session.verify = TLS_VERIFY
-        _session.headers.update({
-            "Accept": "application/json",
-        })
+        _session.headers.update(
+            {
+                "Accept": "application/json",
+            }
+        )
     return _session
 
 
@@ -49,10 +51,18 @@ def _query_cincinnati(channel: str, arch: str = "amd64") -> Optional[dict]:
             timeout=TIMEOUT_CINCINNATI,
         )
         if resp.status_code == 200:
-            return resp.json()
+            try:
+                return resp.json()
+            except ValueError:
+                logger.warning(
+                    "Cincinnati returned invalid JSON for channel=%s", channel
+                )
+                return None
         logger.debug(
             "Cincinnati returned %d for channel=%s arch=%s",
-            resp.status_code, channel, arch,
+            resp.status_code,
+            channel,
+            arch,
         )
         return None
     except requests.RequestException as exc:
@@ -102,14 +112,14 @@ def discover_channels_for_version(version: str, arch: str = "amd64") -> list[str
 def _version_sort_key(version: str) -> tuple:
     """Parse a version string into a sort key, handling prerelease tags like 4.18.0-rc.0."""
     base, _, prerelease = version.partition("-")
-    parts = []
+    parts: list[int | str] = []
     for segment in base.split("."):
         try:
             parts.append(int(segment))
         except ValueError:
             parts.append(segment)
     if prerelease:
-        pre_parts = []
+        pre_parts: list[tuple[int, int | str]] = []
         for seg in prerelease.split("."):
             try:
                 pre_parts.append((0, int(seg)))

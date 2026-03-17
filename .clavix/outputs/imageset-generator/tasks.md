@@ -235,22 +235,22 @@
 
 ## Phase 11: Code review fixes — hardening and documentation (ref: CodeRabbit review)
 
-- [ ] **Handle JSONDecodeError in Cincinnati API client** (ref: CodeRabbit #3)
+- [x] **Handle JSONDecodeError in Cincinnati API client** (ref: CodeRabbit #3)
   Task ID: phase-11-json-decode-01
   > **Implementation**: Edit `src/imageset_generator/discovery.py` — `_query_cincinnati()` function, line ~51.
   > **Details**: Wrap `resp.json()` in a try/except to catch `ValueError` (parent of `json.JSONDecodeError`). When caught, log a warning with `logger.warning("Cincinnati returned invalid JSON for channel=%s", channel)` and return `None`. This matches the existing error handling pattern where `requests.RequestException` is caught and returns `None`. The caller (`discover_ocp_versions`, etc.) already handles `None` returns gracefully by falling back to cached data.
 
-- [ ] **Add subprocess timeout to test_src_layout import check** (ref: CodeRabbit #4)
+- [x] **Add subprocess timeout to test_src_layout import check** (ref: CodeRabbit #4)
   Task ID: phase-11-subprocess-timeout-02
   > **Implementation**: Edit `tests/unit/test_src_layout.py` — the `subprocess.run()` call around line 50.
   > **Details**: Add `timeout=30` parameter to the `subprocess.run()` call that checks `PROJECT_ROOT` and `RUNTIME_ROOT` imports. This prevents the test from hanging if the Python interpreter blocks on startup. No try/except needed — `subprocess.TimeoutExpired` will naturally fail the test with a clear traceback.
 
-- [ ] **Remove `|| true` from CI quality workflow** (ref: CodeRabbit #6)
+- [x] **Remove `|| true` from CI quality workflow** (ref: CodeRabbit #6)
   Task ID: phase-11-ci-quality-gate-03
   > **Implementation**: Edit `.github/workflows/quality.yml` — lines 31, 35, 39, 43, 47.
   > **Details**: Remove `|| true` from the black, isort, flake8, pylint, and mypy commands so lint/type failures actually fail the CI job. Currently all quality checks are silently swallowed. Before removing, verify the codebase passes all checks locally by running: `black --check --diff src tests`, `isort --check-only --diff src tests`, `flake8 --max-line-length=120 --extend-ignore=E203,W503 src tests`, `pylint --max-line-length=120 --disable=C0111,R0913,R0914 src/imageset_generator`, `mypy --ignore-missing-imports src/imageset_generator`. Fix any failures before removing `|| true` to avoid breaking CI.
 
-- [ ] **Update README test counts and fix import paths in code snippets** (ref: CodeRabbit #7)
+- [x] **Update README test counts and fix import paths in code snippets** (ref: CodeRabbit #7)
   Task ID: phase-11-readme-update-04
   > **Implementation**: Edit `README.md`.
   > **Details**: Search for all test count references (e.g., "46 passing tests", "27 tests") and update to current count (98 tests, 97 passing). Also fix code snippets that use bare imports (`from constants import ...`, `from app import ...`, `from validation import ...`) to use fully-qualified package imports (`from imageset_generator.constants import ...`, etc.) so examples are copy-pasteable. Run `grep -n "tests" README.md` and `grep -n "^from " README.md` to find all occurrences.

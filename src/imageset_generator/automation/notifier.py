@@ -7,16 +7,17 @@ Supports multiple notification channels:
 - Generic Webhooks
 """
 
+import html
+import json
+import logging
 import os
 import re
-import json
 import smtplib
-import logging
-import html
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any, Dict, Optional
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -46,35 +47,36 @@ class NotificationManager:
             config: Notification configuration dictionary
         """
         self.config = config
-        self.enabled = config.get('enabled', False)
+        self.enabled = config.get("enabled", False)
 
         if not self.enabled:
             logger.info("Notifications are disabled")
             return
 
         # Initialize notification channels
-        self.email_config = config.get('email', {})
-        self.slack_config = config.get('slack', {})
-        self.webhook_config = config.get('webhook', {})
+        self.email_config = config.get("email", {})
+        self.slack_config = config.get("slack", {})
+        self.webhook_config = config.get("webhook", {})
 
         # Expand environment variables in configuration
         self._expand_env_vars()
 
     def _expand_env_vars(self):
         """Expand environment variables in configuration values"""
+
         def expand_value(value):
             """Expand ${VAR} patterns in value, supporting multiple and embedded variables"""
             if not isinstance(value, str):
                 return value
-            
+
             # Pattern to match ${VAR_NAME}
-            pattern = r'\$\{([^}]+)\}'
-            
+            pattern = r"\$\{([^}]+)\}"
+
             def replace_var(match):
                 var_name = match.group(1)
                 # Return environment variable value or the original placeholder if not found
                 return os.environ.get(var_name, match.group(0))
-            
+
             # Replace all ${VAR} occurrences in the string
             return re.sub(pattern, replace_var, value)
 
@@ -89,7 +91,9 @@ class NotificationManager:
         expand_dict(self.slack_config)
         expand_dict(self.webhook_config)
 
-    def notify_version_selected(self, version: str, channel: str, metadata: Optional[Dict] = None):
+    def notify_version_selected(
+        self, version: str, channel: str, metadata: Optional[Dict] = None
+    ):
         """
         Send notification when version is selected
 
@@ -113,11 +117,13 @@ class NotificationManager:
                 "version": version,
                 "channel": channel,
                 "metadata": metadata,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
 
-    def notify_mirror_start(self, version: str, job_name: str, metadata: Optional[Dict] = None):
+    def notify_mirror_start(
+        self, version: str, job_name: str, metadata: Optional[Dict] = None
+    ):
         """
         Send notification when mirroring starts
 
@@ -141,11 +147,17 @@ class NotificationManager:
                 "version": version,
                 "job_name": job_name,
                 "metadata": metadata,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
 
-    def notify_mirror_complete(self, version: str, job_name: str, duration: float, metadata: Optional[Dict] = None):
+    def notify_mirror_complete(
+        self,
+        version: str,
+        job_name: str,
+        duration: float,
+        metadata: Optional[Dict] = None,
+    ):
         """
         Send notification when mirroring completes
 
@@ -160,7 +172,9 @@ class NotificationManager:
 
         metadata = metadata or {}
         subject = f"ImageSet Automation: Mirroring Complete for {version}"
-        message = self._format_mirror_complete_message(version, job_name, duration, metadata)
+        message = self._format_mirror_complete_message(
+            version, job_name, duration, metadata
+        )
 
         self._send_notifications(
             subject=subject,
@@ -171,8 +185,8 @@ class NotificationManager:
                 "job_name": job_name,
                 "duration_seconds": duration,
                 "metadata": metadata,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
 
     def notify_failure(self, error: str, context: Optional[Dict] = None):
@@ -197,11 +211,13 @@ class NotificationManager:
             data={
                 "error": error,
                 "context": context,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
 
-    def _send_notifications(self, subject: str, message: str, event_type: str, data: Dict):
+    def _send_notifications(
+        self, subject: str, message: str, event_type: str, data: Dict
+    ):
         """
         Send notifications to all enabled channels
 
@@ -215,21 +231,23 @@ class NotificationManager:
         notify_key = f"notify_on_{event_type}"
 
         # Email
-        if self.email_config.get('enabled') and self.email_config.get(notify_key, True):
+        if self.email_config.get("enabled") and self.email_config.get(notify_key, True):
             try:
                 self._send_email(subject, message)
             except Exception as e:
                 logger.error(f"Failed to send email notification: {e}")
 
         # Slack
-        if self.slack_config.get('enabled') and self.slack_config.get(notify_key, True):
+        if self.slack_config.get("enabled") and self.slack_config.get(notify_key, True):
             try:
                 self._send_slack(subject, message, data, event_type)
             except Exception as e:
                 logger.error(f"Failed to send Slack notification: {e}")
 
         # Webhook
-        if self.webhook_config.get('enabled') and self.webhook_config.get(notify_key, True):
+        if self.webhook_config.get("enabled") and self.webhook_config.get(
+            notify_key, True
+        ):
             try:
                 self._send_webhook(subject, message, data)
             except Exception as e:
@@ -240,32 +258,34 @@ class NotificationManager:
         config = self.email_config
 
         # Validate required email configuration
-        required_fields = ['from_address', 'to_addresses', 'smtp_server', 'smtp_port']
+        required_fields = ["from_address", "to_addresses", "smtp_server", "smtp_port"]
         missing_fields = [f for f in required_fields if not config.get(f)]
         if missing_fields:
-            raise ValueError(f"Missing required email configuration fields: {', '.join(missing_fields)}")
+            raise ValueError(
+                f"Missing required email configuration fields: {', '.join(missing_fields)}"
+            )
 
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = config['from_address']
-        msg['To'] = ', '.join(config['to_addresses'])
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = config["from_address"]
+        msg["To"] = ", ".join(config["to_addresses"])
 
         # Add plain text body
-        text_part = MIMEText(body, 'plain')
+        text_part = MIMEText(body, "plain")
         msg.attach(text_part)
 
         # Add HTML body
         html_body = self._text_to_html(body)
-        html_part = MIMEText(html_body, 'html')
+        html_part = MIMEText(html_body, "html")
         msg.attach(html_part)
 
         # Send email
-        smtp_class = smtplib.SMTP_SSL if config.get('use_ssl') else smtplib.SMTP
-        with smtp_class(config['smtp_server'], config['smtp_port']) as server:
-            if config.get('use_tls') and not config.get('use_ssl'):
+        smtp_class = smtplib.SMTP_SSL if config.get("use_ssl") else smtplib.SMTP
+        with smtp_class(config["smtp_server"], config["smtp_port"]) as server:
+            if config.get("use_tls") and not config.get("use_ssl"):
                 server.starttls()
-            if config.get('smtp_user') and config.get('smtp_password'):
-                server.login(config['smtp_user'], config['smtp_password'])
+            if config.get("smtp_user") and config.get("smtp_password"):
+                server.login(config["smtp_user"], config["smtp_password"])
             server.send_message(msg)
 
         logger.info(f"Email notification sent: {subject}")
@@ -279,13 +299,17 @@ class NotificationManager:
                 key_lower = key_str.lower()
                 if key_lower == "metadata":
                     sanitized[key_str] = self._sanitize_payload(value, redact_all=True)
-                elif redact_all or any(term in key_lower for term in self._SENSITIVE_KEYS):
+                elif redact_all or any(
+                    term in key_lower for term in self._SENSITIVE_KEYS
+                ):
                     sanitized[key_str] = "<redacted>"
                 else:
                     sanitized[key_str] = self._sanitize_payload(value)
             return sanitized
         if isinstance(data, list):
-            return [self._sanitize_payload(item, redact_all=redact_all) for item in data]
+            return [
+                self._sanitize_payload(item, redact_all=redact_all) for item in data
+            ]
         if redact_all:
             return "<redacted>"
         return data
@@ -293,7 +317,7 @@ class NotificationManager:
     def _send_slack(self, subject: str, message: str, data: Dict, event_type: str):
         """Send Slack notification"""
         config = self.slack_config
-        webhook_url = config.get('webhook_url')
+        webhook_url = config.get("webhook_url")
         if not webhook_url:
             logger.error("Missing required Slack configuration field: webhook_url")
             raise ValueError("Missing required Slack configuration field: webhook_url")
@@ -304,31 +328,25 @@ class NotificationManager:
             "color": self._get_color_for_event(event_type),
             "text": message,
             "footer": "ImageSet Generator",
-            "ts": int(datetime.utcnow().timestamp())
+            "ts": int(datetime.utcnow().timestamp()),
         }
         if sanitized_data:
             attachment["fields"] = [
                 {
                     "title": "Details",
                     "value": json.dumps(sanitized_data, indent=2, sort_keys=True),
-                    "short": False
+                    "short": False,
                 }
             ]
         payload = {
-            "channel": config.get('channel'),
-            "username": config.get('username', 'ImageSet Automation'),
-            "icon_emoji": config.get('icon_emoji', ':package:'),
+            "channel": config.get("channel"),
+            "username": config.get("username", "ImageSet Automation"),
+            "icon_emoji": config.get("icon_emoji", ":package:"),
             "text": f"*{subject}*",
-            "attachments": [
-                attachment
-            ]
+            "attachments": [attachment],
         }
 
-        response = requests.post(
-            webhook_url,
-            json=payload,
-            timeout=10
-        )
+        response = requests.post(webhook_url, json=payload, timeout=10)
         response.raise_for_status()
 
         logger.info(f"Slack notification sent: {subject}")
@@ -338,33 +356,27 @@ class NotificationManager:
         config = self.webhook_config
 
         # Validate required webhook configuration
-        if not config.get('url'):
+        if not config.get("url"):
             raise ValueError("Missing required webhook configuration field: url")
 
         # Prepare payload
-        payload = {
-            "subject": subject,
-            "message": message,
-            "data": data
-        }
+        payload = {"subject": subject, "message": message, "data": data}
 
         # Prepare headers
-        headers = config.get('headers', {})
+        headers = config.get("headers", {})
 
         # Send webhook
-        method = config.get('method', 'POST').upper()
+        method = config.get("method", "POST").upper()
         response = requests.request(
-            method=method,
-            url=config['url'],
-            json=payload,
-            headers=headers,
-            timeout=10
+            method=method, url=config["url"], json=payload, headers=headers, timeout=10
         )
         response.raise_for_status()
 
         logger.info(f"Webhook notification sent: {subject}")
 
-    def _format_version_selected_message(self, version: str, channel: str, metadata: Dict) -> str:
+    def _format_version_selected_message(
+        self, version: str, channel: str, metadata: Dict
+    ) -> str:
         """Format version selected message"""
         lines = [
             "Version Selection Completed",
@@ -373,7 +385,7 @@ class NotificationManager:
             f"Selected Version: {version}",
             f"Channel: {channel}",
             f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
-            ""
+            "",
         ]
 
         if metadata:
@@ -381,17 +393,21 @@ class NotificationManager:
             for key, value in metadata.items():
                 lines.append(f"  {key}: {value}")
 
-        lines.extend([
-            "",
-            "Next Steps:",
-            "- ImageSet configuration will be generated",
-            "- Kubernetes Job will be created to start mirroring",
-            "- You will receive another notification when mirroring completes"
-        ])
+        lines.extend(
+            [
+                "",
+                "Next Steps:",
+                "- ImageSet configuration will be generated",
+                "- Kubernetes Job will be created to start mirroring",
+                "- You will receive another notification when mirroring completes",
+            ]
+        )
 
         return "\n".join(lines)
 
-    def _format_mirror_start_message(self, version: str, job_name: str, metadata: Dict) -> str:
+    def _format_mirror_start_message(
+        self, version: str, job_name: str, metadata: Dict
+    ) -> str:
         """Format mirror start message"""
         lines = [
             "Mirroring Process Started",
@@ -400,25 +416,29 @@ class NotificationManager:
             f"OCP Version: {version}",
             f"Kubernetes Job: {job_name}",
             f"Start Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
-            ""
+            "",
         ]
 
-        if metadata.get('operators'):
+        if metadata.get("operators"):
             lines.append(f"Operators: {len(metadata['operators'])} packages")
-        if metadata.get('additional_images'):
+        if metadata.get("additional_images"):
             lines.append(f"Additional Images: {len(metadata['additional_images'])}")
 
-        lines.extend([
-            "",
-            "Status:",
-            "- The mirroring job is now running in Kubernetes",
-            "- This process may take several hours depending on content size",
-            "- You will receive a notification when mirroring completes"
-        ])
+        lines.extend(
+            [
+                "",
+                "Status:",
+                "- The mirroring job is now running in Kubernetes",
+                "- This process may take several hours depending on content size",
+                "- You will receive a notification when mirroring completes",
+            ]
+        )
 
         return "\n".join(lines)
 
-    def _format_mirror_complete_message(self, version: str, job_name: str, duration: float, metadata: Dict) -> str:
+    def _format_mirror_complete_message(
+        self, version: str, job_name: str, duration: float, metadata: Dict
+    ) -> str:
         """Format mirror complete message"""
         hours = int(duration // 3600)
         minutes = int((duration % 3600) // 60)
@@ -432,20 +452,22 @@ class NotificationManager:
             f"Kubernetes Job: {job_name}",
             f"Completion Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
             f"Duration: {hours}h {minutes}m {seconds}s",
-            ""
+            "",
         ]
 
-        if metadata.get('mirror_size'):
+        if metadata.get("mirror_size"):
             lines.append(f"Mirror Size: {metadata['mirror_size']}")
-        if metadata.get('image_count'):
+        if metadata.get("image_count"):
             lines.append(f"Images Mirrored: {metadata['image_count']}")
 
-        lines.extend([
-            "",
-            "Status: SUCCESS",
-            "",
-            "The mirrored content is now available and ready for use in your disconnected environment."
-        ])
+        lines.extend(
+            [
+                "",
+                "Status: SUCCESS",
+                "",
+                "The mirrored content is now available and ready for use in your disconnected environment.",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -459,7 +481,7 @@ class NotificationManager:
             "",
             "Error:",
             f"  {error}",
-            ""
+            "",
         ]
 
         if context:
@@ -468,34 +490,36 @@ class NotificationManager:
                 lines.append(f"  {key}: {value}")
             lines.append("")
 
-        lines.extend([
-            "Action Required:",
-            "- Review the automation logs for details",
-            "- Check Kubernetes job status if a job was created",
-            "- Verify configuration and credentials",
-            "- Contact the platform team if the issue persists"
-        ])
+        lines.extend(
+            [
+                "Action Required:",
+                "- Review the automation logs for details",
+                "- Check Kubernetes job status if a job was created",
+                "- Verify configuration and credentials",
+                "- Contact the platform team if the issue persists",
+            ]
+        )
 
         return "\n".join(lines)
 
     def _text_to_html(self, text: str) -> str:
         """Convert plain text to simple HTML"""
         escaped_text = html.escape(text, quote=True)
-        lines = escaped_text.split('\n')
+        lines = escaped_text.split("\n")
         html_lines = ['<html><body><pre style="font-family: monospace;">']
         html_lines.extend(lines)
-        html_lines.append('</pre></body></html>')
-        return '\n'.join(html_lines)
+        html_lines.append("</pre></body></html>")
+        return "\n".join(html_lines)
 
     def _get_color_for_event(self, event_type: str) -> str:
         """Get color code for Slack attachments based on event type"""
         colors = {
-            'version_selected': '#36a64f',  # Green
-            'mirror_start': '#2196F3',      # Blue
-            'mirror_complete': '#4CAF50',   # Success green
-            'failure': '#f44336'            # Red
+            "version_selected": "#36a64f",  # Green
+            "mirror_start": "#2196F3",  # Blue
+            "mirror_complete": "#4CAF50",  # Success green
+            "failure": "#f44336",  # Red
         }
-        return colors.get(event_type, '#808080')  # Default gray
+        return colors.get(event_type, "#808080")  # Default gray
 
 
 def create_notifier(config_path: Optional[str] = None) -> NotificationManager:
@@ -509,13 +533,11 @@ def create_notifier(config_path: Optional[str] = None) -> NotificationManager:
         NotificationManager instance
     """
     if config_path is None:
-        config_path = os.path.join(
-            os.path.dirname(__file__),
-            'config.yaml'
-        )
+        config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
 
     import yaml
-    with open(config_path, 'r') as f:
+
+    with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
-    return NotificationManager(config.get('notifications', {}))
+    return NotificationManager(config.get("notifications", {}))

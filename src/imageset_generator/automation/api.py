@@ -4,20 +4,20 @@ Flask API Endpoints for Automation
 Provides REST API endpoints for managing and monitoring automation.
 """
 
-import os
 import logging
-from datetime import datetime
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
 from flask import Blueprint, jsonify, request
 
 from ..constants import AUTOMATION_CONFIG_PATH
+from .engine import load_config
 from .scheduler import AutomationScheduler
-from .engine import AutomationEngine, load_config
 
 logger = logging.getLogger(__name__)
 
 # Create Blueprint
-automation_bp = Blueprint('automation', __name__, url_prefix='/api/automation')
+automation_bp = Blueprint("automation", __name__, url_prefix="/api/automation")
 
 # Global scheduler instance (initialized by app)
 _scheduler = None
@@ -43,7 +43,7 @@ def init_automation(config_path: str = str(AUTOMATION_CONFIG_PATH)):
 
         _config = load_config(config_path)
 
-        if not _config.get('scheduler', {}).get('enabled', False):
+        if not _config.get("scheduler", {}).get("enabled", False):
             logger.info("Automation scheduler is disabled")
             return None
 
@@ -58,15 +58,15 @@ def init_automation(config_path: str = str(AUTOMATION_CONFIG_PATH)):
         return None
 
 
-@automation_bp.route('/status', methods=['GET'])
+@automation_bp.route("/status", methods=["GET"])
 def get_status():
     """Get automation status"""
     try:
         if _scheduler is None:
-            return jsonify({
-                "enabled": False,
-                "message": "Automation is not initialized"
-            }), 200
+            return (
+                jsonify({"enabled": False, "message": "Automation is not initialized"}),
+                200,
+            )
 
         schedule_info = _scheduler.get_schedule_info()
 
@@ -75,19 +75,24 @@ def get_status():
         state = engine.state
         history = engine.history[-10:] if engine.history else []  # Last 10 executions
 
-        return jsonify({
-            "enabled": True,
-            "schedule": schedule_info,
-            "state": state,
-            "recent_executions": history
-        }), 200
+        return (
+            jsonify(
+                {
+                    "enabled": True,
+                    "schedule": schedule_info,
+                    "state": state,
+                    "recent_executions": history,
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.exception(f"Error getting automation status: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/trigger', methods=['POST'])
+@automation_bp.route("/trigger", methods=["POST"])
 def trigger_automation():
     """Manually trigger automation execution"""
     try:
@@ -99,19 +104,19 @@ def trigger_automation():
         # Run automation
         result = _scheduler.run_now()
 
-        status_code = 200 if result.get('success') else 500
+        status_code = 200 if result.get("success") else 500
 
-        return jsonify({
-            "message": "Automation execution completed",
-            "result": result
-        }), status_code
+        return (
+            jsonify({"message": "Automation execution completed", "result": result}),
+            status_code,
+        )
 
     except Exception as e:
         logger.exception(f"Error triggering automation: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/config', methods=['GET'])
+@automation_bp.route("/config", methods=["GET"])
 def get_config():
     """Get automation configuration (sanitized)"""
     try:
@@ -128,7 +133,7 @@ def get_config():
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/config', methods=['PUT'])
+@automation_bp.route("/config", methods=["PUT"])
 def update_config():
     """Update automation configuration"""
     try:
@@ -142,17 +147,22 @@ def update_config():
 
         # Validate and update config
         # In production, this should save to file and restart scheduler
-        return jsonify({
-            "message": "Configuration update not implemented in this version",
-            "note": "Please update src/imageset_generator/automation/config.yaml manually and restart"
-        }), 501
+        return (
+            jsonify(
+                {
+                    "message": "Configuration update not implemented in this version",
+                    "note": "Please update src/imageset_generator/automation/config.yaml manually and restart",
+                }
+            ),
+            501,
+        )
 
     except Exception as e:
         logger.exception(f"Error updating automation config: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/history', methods=['GET'])
+@automation_bp.route("/history", methods=["GET"])
 def get_history():
     """Get execution history"""
     try:
@@ -160,27 +170,32 @@ def get_history():
             return jsonify({"error": "Automation is not initialized"}), 400
 
         # Get query parameters
-        limit = request.args.get('limit', default=50, type=int)
-        offset = request.args.get('offset', default=0, type=int)
+        limit = request.args.get("limit", default=50, type=int)
+        offset = request.args.get("offset", default=0, type=int)
 
         history = _scheduler.engine.history
 
         # Apply pagination
-        paginated = history[offset:offset + limit]
+        paginated = history[offset : offset + limit]
 
-        return jsonify({
-            "total": len(history),
-            "limit": limit,
-            "offset": offset,
-            "executions": paginated
-        }), 200
+        return (
+            jsonify(
+                {
+                    "total": len(history),
+                    "limit": limit,
+                    "offset": offset,
+                    "executions": paginated,
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.exception(f"Error getting automation history: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/history/<execution_id>', methods=['GET'])
+@automation_bp.route("/history/<execution_id>", methods=["GET"])
 def get_execution(execution_id: str):
     """Get specific execution details"""
     try:
@@ -191,8 +206,7 @@ def get_execution(execution_id: str):
 
         # Find execution
         execution = next(
-            (e for e in history if e.get('execution_id') == execution_id),
-            None
+            (e for e in history if e.get("execution_id") == execution_id), None
         )
 
         if not execution:
@@ -205,7 +219,7 @@ def get_execution(execution_id: str):
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/jobs', methods=['GET'])
+@automation_bp.route("/jobs", methods=["GET"])
 def get_jobs():
     """Get Kubernetes jobs status"""
     try:
@@ -218,8 +232,7 @@ def get_jobs():
 
         # List jobs
         jobs = k8s_manager.batch_v1.list_namespaced_job(
-            namespace=k8s_manager.namespace,
-            label_selector="app=imageset-mirror"
+            namespace=k8s_manager.namespace, label_selector="app=imageset-mirror"
         )
 
         job_list = []
@@ -231,7 +244,11 @@ def get_jobs():
                 "active": job.status.active or 0,
                 "succeeded": job.status.succeeded or 0,
                 "failed": job.status.failed or 0,
-                "completion_time": job.status.completion_time.isoformat() if job.status.completion_time else None
+                "completion_time": (
+                    job.status.completion_time.isoformat()
+                    if job.status.completion_time
+                    else None
+                ),
             }
             job_list.append(job_info)
 
@@ -242,7 +259,7 @@ def get_jobs():
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/jobs/<job_name>', methods=['GET'])
+@automation_bp.route("/jobs/<job_name>", methods=["GET"])
 def get_job(job_name: str):
     """Get specific job status"""
     try:
@@ -255,8 +272,7 @@ def get_job(job_name: str):
 
         # Get job
         job = k8s_manager.batch_v1.read_namespaced_job_status(
-            name=job_name,
-            namespace=k8s_manager.namespace
+            name=job_name, namespace=k8s_manager.namespace
         )
 
         job_info = {
@@ -266,30 +282,38 @@ def get_job(job_name: str):
             "active": job.status.active or 0,
             "succeeded": job.status.succeeded or 0,
             "failed": job.status.failed or 0,
-            "start_time": job.status.start_time.isoformat() if job.status.start_time else None,
-            "completion_time": job.status.completion_time.isoformat() if job.status.completion_time else None,
-            "conditions": []
+            "start_time": (
+                job.status.start_time.isoformat() if job.status.start_time else None
+            ),
+            "completion_time": (
+                job.status.completion_time.isoformat()
+                if job.status.completion_time
+                else None
+            ),
+            "conditions": [],
         }
 
         if job.status.conditions:
             for condition in job.status.conditions:
-                job_info["conditions"].append({
-                    "type": condition.type,
-                    "status": condition.status,
-                    "reason": condition.reason,
-                    "message": condition.message
-                })
+                job_info["conditions"].append(
+                    {
+                        "type": condition.type,
+                        "status": condition.status,
+                        "reason": condition.reason,
+                        "message": condition.message,
+                    }
+                )
 
         return jsonify(job_info), 200
 
     except Exception as e:
-        if hasattr(e, 'status') and e.status == 404:
+        if hasattr(e, "status") and e.status == 404:
             return jsonify({"error": "Job not found"}), 404
         logger.exception(f"Error getting job: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@automation_bp.route('/jobs/<job_name>/logs', methods=['GET'])
+@automation_bp.route("/jobs/<job_name>/logs", methods=["GET"])
 def get_job_logs(job_name: str):
     """Get job logs"""
     try:
@@ -300,15 +324,14 @@ def get_job_logs(job_name: str):
         if not k8s_manager:
             return jsonify({"error": "Kubernetes manager not available"}), 400
 
-        tail_lines = request.args.get('tail', default=100, type=int)
+        tail_lines = request.args.get("tail", default=100, type=int)
 
         logs = k8s_manager.get_job_logs(job_name, tail_lines=tail_lines)
 
-        return jsonify({
-            "job_name": job_name,
-            "tail_lines": tail_lines,
-            "logs": logs
-        }), 200
+        return (
+            jsonify({"job_name": job_name, "tail_lines": tail_lines, "logs": logs}),
+            200,
+        )
 
     except Exception as e:
         logger.exception(f"Error getting job logs: {e}")
@@ -330,24 +353,24 @@ def sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:
     sanitized = copy.deepcopy(config)
 
     # Remove sensitive notification settings
-    if 'notifications' in sanitized:
-        if 'email' in sanitized['notifications']:
-            email = sanitized['notifications']['email']
-            if 'smtp_password' in email:
-                email['smtp_password'] = '***'
+    if "notifications" in sanitized:
+        if "email" in sanitized["notifications"]:
+            email = sanitized["notifications"]["email"]
+            if "smtp_password" in email:
+                email["smtp_password"] = "***"
 
-        if 'slack' in sanitized['notifications']:
-            slack = sanitized['notifications']['slack']
-            if 'webhook_url' in slack:
-                slack['webhook_url'] = '***'
+        if "slack" in sanitized["notifications"]:
+            slack = sanitized["notifications"]["slack"]
+            if "webhook_url" in slack:
+                slack["webhook_url"] = "***"
 
-        if 'webhook' in sanitized['notifications']:
-            webhook = sanitized['notifications']['webhook']
-            if 'url' in webhook:
-                webhook['url'] = '***'
-            if 'headers' in webhook and isinstance(webhook['headers'], dict):
-                for key in webhook['headers']:
-                    if 'auth' in key.lower() or 'token' in key.lower():
-                        webhook['headers'][key] = '***'
+        if "webhook" in sanitized["notifications"]:
+            webhook = sanitized["notifications"]["webhook"]
+            if "url" in webhook:
+                webhook["url"] = "***"
+            if "headers" in webhook and isinstance(webhook["headers"], dict):
+                for key in webhook["headers"]:
+                    if "auth" in key.lower() or "token" in key.lower():
+                        webhook["headers"][key] = "***"
 
     return sanitized

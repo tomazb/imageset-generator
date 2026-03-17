@@ -10,8 +10,8 @@ except ImportError:
     print("Install with: pip install requests")
     exit(1)
 
-import json
 import sys
+
 import pytest
 
 
@@ -53,7 +53,11 @@ def test_api(base_url="http://localhost:5000"):
         response = requests.post(f"{base_url}/api/generate/preview", json=test_config)
         if response.status_code != 200:
             content_type = response.headers.get("content-type", "")
-            extra = response.json() if content_type.startswith("application/json") else response.text
+            extra = (
+                response.json()
+                if content_type.startswith("application/json")
+                else response.text
+            )
             pytest.fail(f"Preview generation failed: {response.status_code}, {extra}")
         data = response.json()
         assert "yaml" in data

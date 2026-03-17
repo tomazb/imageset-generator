@@ -1,8 +1,8 @@
 import shutil
-from pathlib import Path
 import subprocess
 import sys
 import zipfile
+from pathlib import Path
 
 
 def test_wheel_includes_runtime_assets(tmp_path):
@@ -12,14 +12,26 @@ def test_wheel_includes_runtime_assets(tmp_path):
     if uv:
         result = subprocess.run(
             [uv, "build", "--wheel", "--out-dir", str(tmp_path)],
-            capture_output=True, text=True, cwd=project_root,
+            capture_output=True,
+            text=True,
+            cwd=project_root,
         )
     else:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "wheel", str(project_root),
-             "--no-deps", "--no-build-isolation",
-             "--wheel-dir", str(tmp_path)],
-            capture_output=True, text=True, cwd=project_root,
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "wheel",
+                str(project_root),
+                "--no-deps",
+                "--no-build-isolation",
+                "--wheel-dir",
+                str(tmp_path),
+            ],
+            capture_output=True,
+            text=True,
+            cwd=project_root,
         )
 
     assert result.returncode == 0, result.stderr
@@ -45,13 +57,18 @@ def test_containerfile_uses_disconnected_safe_local_install():
     project_root = Path(__file__).resolve().parents[2]
     containerfile = (project_root / "Containerfile").read_text()
 
-    assert "python3.11 -m pip install --no-cache-dir --no-build-isolation --no-deps ." in containerfile
+    assert (
+        "python3.11 -m pip install --no-cache-dir --no-build-isolation --no-deps ."
+        in containerfile
+    )
 
 
 def test_ci_workflows_use_non_isolated_editable_installs():
     project_root = Path(__file__).resolve().parents[2]
     test_workflow = (project_root / ".github" / "workflows" / "test.yml").read_text()
-    quality_workflow = (project_root / ".github" / "workflows" / "quality.yml").read_text()
+    quality_workflow = (
+        project_root / ".github" / "workflows" / "quality.yml"
+    ).read_text()
 
     assert "pip install --no-build-isolation --no-deps -e ." in test_workflow
     assert "pip install -r requirements.txt" in quality_workflow

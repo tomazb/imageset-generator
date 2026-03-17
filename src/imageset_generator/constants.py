@@ -8,16 +8,14 @@ Centralized configuration constants for timeouts, ports, patterns, and defaults.
 import os
 from pathlib import Path
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 def _looks_like_repo_root(path: Path) -> bool:
     """Return True when the given path looks like a repo checkout root."""
-    return (
-        (path / "pyproject.toml").exists()
-        and (path / "src" / "imageset_generator").is_dir()
-    )
+    return (path / "pyproject.toml").exists() and (
+        path / "src" / "imageset_generator"
+    ).is_dir()
 
 
 def _resolve_project_root() -> Path | None:
@@ -85,14 +83,15 @@ def get_data_write_path(filename: str) -> Path:
     RUNTIME_DATA_DIR.mkdir(parents=True, exist_ok=True)
     return get_runtime_data_path(filename)
 
+
 # Network Timeouts (seconds)
-TIMEOUT_OC_MIRROR_SHORT = 30      # For list operations
-TIMEOUT_OC_MIRROR_MEDIUM = 120    # For catalog listings
-TIMEOUT_OC_MIRROR_LONG = 180      # For render operations
-TIMEOUT_OPM_RENDER = 180          # For opm render commands
-TIMEOUT_CATALOG_DISCOVERY = 300   # For catalog discovery
-TIMEOUT_CINCINNATI = 15           # For Cincinnati API requests
-TIMEOUT_SKOPEO = 30               # For skopeo inspect commands
+TIMEOUT_OC_MIRROR_SHORT = 30  # For list operations
+TIMEOUT_OC_MIRROR_MEDIUM = 120  # For catalog listings
+TIMEOUT_OC_MIRROR_LONG = 180  # For render operations
+TIMEOUT_OPM_RENDER = 180  # For opm render commands
+TIMEOUT_CATALOG_DISCOVERY = 300  # For catalog discovery
+TIMEOUT_CINCINNATI = 15  # For Cincinnati API requests
+TIMEOUT_SKOPEO = 30  # For skopeo inspect commands
 
 # Cincinnati API Configuration
 CINCINNATI_API_URL = "https://api.openshift.com/api/upgrades_info/v1/graph"
@@ -101,11 +100,11 @@ OCP_MINOR_PROBE_RANGE = range(12, 30)
 
 # Server Configuration
 DEFAULT_PORT = 5000
-DEBUG_MODE = os.environ.get('DEBUG_MODE', 'False').lower() == 'true'
+DEBUG_MODE = os.environ.get("DEBUG_MODE", "False").lower() == "true"
 
 # Version Patterns
-VERSION_PATTERN = r'^\d+\.\d+$'                    # X.Y format
-CHANNEL_PATTERN = r'^[a-zA-Z][a-zA-Z0-9\-]*\d+\.\d+$'  # stable-X.Y format
+VERSION_PATTERN = r"^\d+\.\d+$"  # X.Y format
+CHANNEL_PATTERN = r"^[a-zA-Z][a-zA-Z0-9\-]*\d+\.\d+$"  # stable-X.Y format
 
 # Catalog Configuration
 CATALOG_REGISTRY = "registry.redhat.io"
@@ -117,26 +116,26 @@ BASE_CATALOGS = [
         "name": "Red Hat Operators",
         "base_url": f"{CATALOG_REGISTRY}/{CATALOG_ORG}/redhat-operator-index",
         "description": "Official Red Hat certified operators",
-        "default": True
+        "default": True,
     },
     {
         "name": "Community Operators",
         "base_url": f"{CATALOG_REGISTRY}/{CATALOG_ORG}/community-operator-index",
         "description": "Community-maintained operators",
-        "default": False
+        "default": False,
     },
     {
         "name": "Certified Operators",
         "base_url": f"{CATALOG_REGISTRY}/{CATALOG_ORG}/certified-operator-index",
         "description": "Third-party certified operators",
-        "default": False
+        "default": False,
     },
     {
         "name": "Red Hat Marketplace",
         "base_url": f"{CATALOG_REGISTRY}/{CATALOG_ORG}/redhat-marketplace-index",
         "description": "Commercial operators from Red Hat Marketplace",
-        "default": False
-    }
+        "default": False,
+    },
 ]
 
 # Operator Name Mappings
@@ -158,7 +157,7 @@ OPERATOR_MAPPINGS = {
     "ceph": "odf-operator",
     "elasticsearch": "elasticsearch-operator",
     "jaeger": "jaeger-product",
-    "kiali": "kiali-ossm"
+    "kiali": "kiali-ossm",
 }
 
 # File Paths

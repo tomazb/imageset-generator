@@ -5,18 +5,19 @@ Manages scheduling of automation runs based on monthly execution windows.
 Supports running in the last or second-to-last week of the month.
 """
 
-import sys
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Callable
+import sys
+from datetime import datetime
+from typing import Any, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..constants import AUTOMATION_CONFIG_PATH
 
 try:
+    from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
-    from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
+
     APSCHEDULER_AVAILABLE = True
 except ImportError:
     APSCHEDULER_AVAILABLE = False
@@ -41,13 +42,13 @@ class AutomationScheduler:
             raise ImportError("APScheduler is required for scheduling")
 
         self.config = config
-        self.scheduler_config = config.get('scheduler', {})
+        self.scheduler_config = config.get("scheduler", {})
 
-        if not self.scheduler_config.get('enabled', False):
+        if not self.scheduler_config.get("enabled", False):
             logger.warning("Scheduler is not enabled in configuration")
 
         # Create scheduler
-        timezone = self.scheduler_config.get('timezone', 'UTC')
+        timezone = self.scheduler_config.get("timezone", "UTC")
         self.scheduler = BackgroundScheduler(timezone=timezone)
 
         # Add event listeners
@@ -59,7 +60,7 @@ class AutomationScheduler:
 
     def _get_timezone(self):
         """Return the configured timezone or UTC if unavailable."""
-        timezone_name = self.scheduler_config.get('timezone', 'UTC')
+        timezone_name = self.scheduler_config.get("timezone", "UTC")
         try:
             return ZoneInfo(timezone_name)
         except ZoneInfoNotFoundError:
@@ -68,37 +69,43 @@ class AutomationScheduler:
 
     def start(self):
         """Start the scheduler"""
-        if not self.scheduler_config.get('enabled', False):
+        if not self.scheduler_config.get("enabled", False):
             logger.info("Scheduler is disabled, not starting")
             return
 
-        execution_window = self.scheduler_config.get('execution_window', 'last-week')
-        day_of_week = self.scheduler_config.get('day_of_week', 1)  # Tuesday
-        time_str = self.scheduler_config.get('time', '02:00')
+        execution_window = self.scheduler_config.get("execution_window", "last-week")
+        day_of_week = self.scheduler_config.get("day_of_week", 1)  # Tuesday
+        time_str = self.scheduler_config.get("time", "02:00")
 
         # Parse time with validation
         try:
-            parts = time_str.split(':')
+            parts = time_str.split(":")
             if len(parts) != 2:
-                raise ValueError(f"Invalid time format: '{time_str}'. Expected HH:MM format.")
+                raise ValueError(
+                    f"Invalid time format: '{time_str}'. Expected HH:MM format."
+                )
             hour, minute = int(parts[0]), int(parts[1])
             if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                raise ValueError(f"Invalid time values: hour={hour}, minute={minute}. Hour must be 0-23, minute must be 0-59.")
+                raise ValueError(
+                    f"Invalid time values: hour={hour}, minute={minute}. Hour must be 0-23, minute must be 0-59."
+                )
         except ValueError as e:
             logger.error(f"Failed to parse scheduler time: {e}")
             raise
 
-        logger.info(f"Configuring scheduler: window={execution_window}, day={day_of_week}, time={time_str}")
+        logger.info(
+            f"Configuring scheduler: window={execution_window}, day={day_of_week}, time={time_str}"
+        )
 
-        if execution_window == 'last-week':
+        if execution_window == "last-week":
             # Days 22-31 of month
             self._schedule_last_week(day_of_week, hour, minute)
 
-        elif execution_window == 'second-to-last-week':
+        elif execution_window == "second-to-last-week":
             # Days 15-21 of month
             self._schedule_second_to_last_week(day_of_week, hour, minute)
 
-        elif execution_window == 'both':
+        elif execution_window == "both":
             # Both windows
             self._schedule_last_week(day_of_week, hour, minute)
             self._schedule_second_to_last_week(day_of_week, hour, minute)
@@ -134,44 +141,48 @@ class AutomationScheduler:
         """Schedule for last week of month (days 22-31)"""
         # Create cron trigger for specific day of week in days 22-31
         trigger = CronTrigger(
-            day='22-31',
+            day="22-31",
             day_of_week=day_of_week,
             hour=hour,
             minute=minute,
-            timezone=self.scheduler_config.get('timezone', 'UTC')
+            timezone=self.scheduler_config.get("timezone", "UTC"),
         )
 
         self.scheduler.add_job(
             func=self._run_with_window_check,
             trigger=trigger,
-            args=['last-week'],
-            id='automation-last-week',
-            name='ImageSet Automation (Last Week)',
-            replace_existing=True
+            args=["last-week"],
+            id="automation-last-week",
+            name="ImageSet Automation (Last Week)",
+            replace_existing=True,
         )
 
-        logger.info(f"Scheduled for last week: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}")
+        logger.info(
+            f"Scheduled for last week: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}"
+        )
 
     def _schedule_second_to_last_week(self, day_of_week: int, hour: int, minute: int):
         """Schedule for second-to-last week (days 15-21)"""
         trigger = CronTrigger(
-            day='15-21',
+            day="15-21",
             day_of_week=day_of_week,
             hour=hour,
             minute=minute,
-            timezone=self.scheduler_config.get('timezone', 'UTC')
+            timezone=self.scheduler_config.get("timezone", "UTC"),
         )
 
         self.scheduler.add_job(
             func=self._run_with_window_check,
             trigger=trigger,
-            args=['second-to-last-week'],
-            id='automation-second-to-last-week',
-            name='ImageSet Automation (Second-to-Last Week)',
-            replace_existing=True
+            args=["second-to-last-week"],
+            id="automation-second-to-last-week",
+            name="ImageSet Automation (Second-to-Last Week)",
+            replace_existing=True,
         )
 
-        logger.info(f"Scheduled for second-to-last week: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}")
+        logger.info(
+            f"Scheduled for second-to-last week: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}"
+        )
 
     def _run_with_window_check(self, expected_window: str):
         """
@@ -186,14 +197,19 @@ class AutomationScheduler:
         now = datetime.now(self._get_timezone())
         current_window = self._get_current_window(now)
 
-        logger.info(f"Scheduled run triggered: expected={expected_window}, current={current_window}")
+        logger.info(
+            f"Scheduled run triggered: expected={expected_window}, current={current_window}"
+        )
 
         # Validate we're in the expected window
-        if expected_window == 'last-week' and current_window != 'last-week':
+        if expected_window == "last-week" and current_window != "last-week":
             logger.warning("Not in last week, skipping execution")
             return
 
-        if expected_window == 'second-to-last-week' and current_window != 'second-to-last-week':
+        if (
+            expected_window == "second-to-last-week"
+            and current_window != "second-to-last-week"
+        ):
             logger.warning("Not in second-to-last week, skipping execution")
             return
 
@@ -214,20 +230,22 @@ class AutomationScheduler:
 
         # Last week: days 22-31
         if day >= 22:
-            return 'last-week'
+            return "last-week"
 
         # Second-to-last week: days 15-21
         if 15 <= day <= 21:
-            return 'second-to-last-week'
+            return "second-to-last-week"
 
-        return 'neither'
+        return "neither"
 
     def _run_automation(self) -> Dict[str, Any]:
         """Execute automation engine"""
         try:
             logger.info("Starting automation execution")
             result = self.engine.run_automation()
-            logger.info(f"Automation execution completed: success={result.get('success')}")
+            logger.info(
+                f"Automation execution completed: success={result.get('success')}"
+            )
             return result
 
         except Exception as e:
@@ -235,7 +253,7 @@ class AutomationScheduler:
             return {
                 "success": False,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
     def _job_executed(self, event):
@@ -244,7 +262,9 @@ class AutomationScheduler:
 
     def _job_error(self, event):
         """Handle job error event"""
-        logger.error(f"Scheduled job error: {event.job_id}, exception: {event.exception}")
+        logger.error(
+            f"Scheduled job error: {event.job_id}, exception: {event.exception}"
+        )
 
     def _log_next_runs(self):
         """Log next scheduled run times"""
@@ -257,7 +277,9 @@ class AutomationScheduler:
         for job in jobs:
             next_run = job.next_run_time
             if next_run:
-                logger.info(f"  - {job.name}: {next_run.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                logger.info(
+                    f"  - {job.name}: {next_run.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                )
             else:
                 logger.info(f"  - {job.name}: Not scheduled")
 
@@ -272,20 +294,22 @@ class AutomationScheduler:
         now = datetime.now(self._get_timezone())
 
         info = {
-            "enabled": self.scheduler_config.get('enabled', False),
+            "enabled": self.scheduler_config.get("enabled", False),
             "running": self.scheduler.running,
-            "timezone": self.scheduler_config.get('timezone', 'UTC'),
-            "execution_window": self.scheduler_config.get('execution_window'),
+            "timezone": self.scheduler_config.get("timezone", "UTC"),
+            "execution_window": self.scheduler_config.get("execution_window"),
             "current_window": self._get_current_window(now),
             "current_time": now.isoformat(),
-            "jobs": []
+            "jobs": [],
         }
 
         for job in jobs:
             job_info = {
                 "id": job.id,
                 "name": job.name,
-                "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None
+                "next_run_time": (
+                    job.next_run_time.isoformat() if job.next_run_time else None
+                ),
             }
             info["jobs"].append(job_info)
 
@@ -298,22 +322,22 @@ def main():
     import signal
     import time
 
-    parser = argparse.ArgumentParser(description='ImageSet Automation Scheduler')
+    parser = argparse.ArgumentParser(description="ImageSet Automation Scheduler")
     parser.add_argument(
-        '--config',
+        "--config",
         default=str(AUTOMATION_CONFIG_PATH),
-        help='Path to configuration file'
+        help="Path to configuration file",
     )
     parser.add_argument(
-        '--log-level',
-        default='INFO',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-        help='Logging level'
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level",
     )
     parser.add_argument(
-        '--run-now',
-        action='store_true',
-        help='Run automation immediately instead of scheduling'
+        "--run-now",
+        action="store_true",
+        help="Run automation immediately instead of scheduling",
     )
 
     args = parser.parse_args()
@@ -321,7 +345,7 @@ def main():
     # Setup logging
     logging.basicConfig(
         level=getattr(logging, args.log_level),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # Load configuration
@@ -333,10 +357,11 @@ def main():
     if args.run_now:
         # Run immediately
         result = scheduler.run_now()
-        print(f"\nExecution result:")
+        print("\nExecution result:")
         import json
+
         print(json.dumps(result, indent=2))
-        sys.exit(0 if result.get('success') else 1)
+        sys.exit(0 if result.get("success") else 1)
 
     # Start scheduler
     scheduler.start()
@@ -363,5 +388,5 @@ def main():
         scheduler.stop()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

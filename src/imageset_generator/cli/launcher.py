@@ -6,8 +6,8 @@ This script provides a unified entry point for both the GUI and CLI versions
 of the ImageSetConfiguration generator.
 """
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 
@@ -20,6 +20,7 @@ def _load_gui_main():
     """Import GUI entry point for package and direct-script execution."""
     if __package__:
         from .gui import main as gui_main
+
         return gui_main
 
     package_root = Path(__file__).resolve().parents[2]
@@ -27,6 +28,7 @@ def _load_gui_main():
         sys.path.insert(0, str(package_root))
 
     from imageset_generator.cli.gui import main as gui_main
+
     return gui_main
 
 
@@ -34,6 +36,7 @@ def _load_cli_main():
     """Import CLI entry point for package and direct-script execution."""
     if __package__:
         from ..generator import main as cli_main
+
         return cli_main
 
     package_root = Path(__file__).resolve().parents[2]
@@ -41,6 +44,7 @@ def _load_cli_main():
         sys.path.insert(0, str(package_root))
 
     from imageset_generator.generator import main as cli_main
+
     return cli_main
 
 
@@ -52,7 +56,7 @@ def check_gui_available():
         # Try to create a root window
         root = tk.Tk()
         root.withdraw()  # Hide the window
-        root.destroy()   # Clean up
+        root.destroy()  # Clean up
         return True
     except Exception:
         return False
@@ -63,27 +67,23 @@ def main():
     raw_args = sys.argv[1:]
     parser = argparse.ArgumentParser(
         description="OpenShift ImageSetConfiguration Generator",
-        add_help=False  # We'll handle help ourselves
+        add_help=False,  # We'll handle help ourselves
     )
-    
+
     parser.add_argument(
-        "--gui",
-        action="store_true",
-        help="Launch the graphical user interface"
+        "--gui", action="store_true", help="Launch the graphical user interface"
     )
-    
+
     parser.add_argument(
         "--cli",
         action="store_true",
-        help="Use command-line interface (default if GUI not available)"
+        help="Use command-line interface (default if GUI not available)",
     )
-    
+
     parser.add_argument(
-        "--help", "-h",
-        action="store_true",
-        help="Show this help message"
+        "--help", "-h", action="store_true", help="Show this help message"
     )
-    
+
     # Parse known args to avoid conflicts with generator.py args
     args, remaining_args = parser.parse_known_args()
 
@@ -94,14 +94,16 @@ def main():
 
     if args.help and not args.cli:
         parser.print_help()
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("For CLI options, use: imageset-generator --cli --help")
-        print("For module mode, use: python -m imageset_generator.cli.launcher --cli --help")
+        print(
+            "For module mode, use: python -m imageset_generator.cli.launcher --cli --help"
+        )
         print("For direct script mode, use: python launcher.py --cli --help")
         print("For GUI mode, use: imageset-generator --gui")
-        print("="*60)
+        print("=" * 60)
         return
-    
+
     use_gui = False
     if args.gui:
         if not check_gui_available():
@@ -118,7 +120,7 @@ def main():
             use_gui = True
         else:
             use_gui = False
-    
+
     if use_gui:
         print("Launching GUI...")
         try:
@@ -130,7 +132,7 @@ def main():
         except Exception as e:
             print(f"Error launching GUI: {e}")
             sys.exit(1)
-    
+
     if not use_gui:
         # Launch CLI version
         try:

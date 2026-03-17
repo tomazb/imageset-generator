@@ -1,15 +1,13 @@
 """Unit tests for the Cincinnati API discovery module."""
 
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from imageset_generator.discovery import (
-    discover_ocp_versions,
-    discover_channels_for_version,
-    discover_channel_releases,
-    get_latest_ocp_version,
     _query_cincinnati,
+    discover_channel_releases,
+    discover_channels_for_version,
+    discover_ocp_versions,
+    get_latest_ocp_version,
 )
 
 
@@ -50,6 +48,7 @@ class TestQueryCincinnati:
     @patch("imageset_generator.discovery._get_session")
     def test_request_exception_returns_none(self, mock_session_fn):
         import requests
+
         session = MagicMock()
         mock_session_fn.return_value = session
         session.get.side_effect = requests.ConnectionError("fail")
@@ -86,6 +85,7 @@ class TestDiscoverOcpVersions:
     @patch("imageset_generator.discovery._query_cincinnati")
     def test_finds_version_on_candidate_only(self, mock_query):
         """A version only on candidate (not stable) should still be discovered."""
+
         def side_effect(channel, arch="amd64"):
             # 4.19 only exists on candidate, not stable/fast/eus
             if channel == "candidate-4.19":
@@ -123,9 +123,7 @@ class TestDiscoverChannelsForVersion:
 class TestDiscoverChannelReleases:
     @patch("imageset_generator.discovery._query_cincinnati")
     def test_returns_sorted_releases(self, mock_query):
-        mock_query.return_value = {
-            "nodes": _make_nodes(["4.16.2", "4.16.0", "4.16.1"])
-        }
+        mock_query.return_value = {"nodes": _make_nodes(["4.16.2", "4.16.0", "4.16.1"])}
 
         result = discover_channel_releases("stable-4.16")
 
@@ -134,10 +132,15 @@ class TestDiscoverChannelReleases:
     @patch("imageset_generator.discovery._query_cincinnati")
     def test_returns_sorted_prerelease_versions(self, mock_query):
         mock_query.return_value = {
-            "nodes": _make_nodes([
-                "4.18.0-rc.10", "4.18.0-rc.2", "4.18.0-ec.0",
-                "4.18.0", "4.18.0-rc.1",
-            ])
+            "nodes": _make_nodes(
+                [
+                    "4.18.0-rc.10",
+                    "4.18.0-rc.2",
+                    "4.18.0-ec.0",
+                    "4.18.0",
+                    "4.18.0-rc.1",
+                ]
+            )
         }
 
         result = discover_channel_releases("candidate-4.18")

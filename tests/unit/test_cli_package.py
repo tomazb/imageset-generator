@@ -1,7 +1,7 @@
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_cli_package_import_does_not_require_tkinter():
@@ -27,7 +27,11 @@ def test_cli_package_main_is_importable_without_preloading_launcher():
     env["PYTHONPATH"] = str(project_root / "src")
 
     result = subprocess.run(
-        [sys.executable, "-c", "from imageset_generator.cli import main; print(callable(main))"],
+        [
+            sys.executable,
+            "-c",
+            "from imageset_generator.cli import main; print(callable(main))",
+        ],
         capture_output=True,
         text=True,
         env=env,

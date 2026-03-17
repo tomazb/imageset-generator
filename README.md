@@ -25,7 +25,7 @@ Bundled seed data ships inside the Python package, while refreshed cache files a
   - Path traversal prevention
   - Configurable TLS verification (secure by default)
 - **Code Quality**
-  - Comprehensive test coverage (27 tests)
+  - Comprehensive test coverage (101 tests)
   - Custom exception classes with detailed context
   - Centralized configuration management
   - Refactored for maintainability
@@ -108,8 +108,8 @@ safe_path_component("operators-redhat-4.18.json")
 TLS verification is configurable and secure by default:
 
 ```python
-from constants import TLS_VERIFY
-from app import build_opm_command
+from imageset_generator.constants import TLS_VERIFY
+from imageset_generator.app import build_opm_command
 
 # TLS_VERIFY = True by default (secure)
 cmd = build_opm_command(catalog_url)  # No --skip-tls flag
@@ -123,7 +123,7 @@ cmd = build_opm_command(catalog_url, skip_tls=True)
 All file paths are sanitized to prevent directory traversal:
 
 ```python
-from validation import safe_path_component
+from imageset_generator.validation import safe_path_component
 
 # Blocks: ../../../etc/passwd, /absolute/path, etc.
 safe_component = safe_path_component("operators-data.json")  # OK
@@ -170,7 +170,7 @@ BASE_CATALOGS = [
 Domain-specific exceptions with detailed context:
 
 ```python
-from exceptions import CatalogRenderError, OperatorNotFoundError
+from imageset_generator.exceptions import CatalogRenderError, OperatorNotFoundError
 
 try:
     render_catalog(catalog_url)
@@ -203,7 +203,7 @@ PYTHONPATH=src pytest tests -q
 PYTHONPATH=src pytest tests/unit/test_validation_simple.py -q
 ```
 
-**Current suite:** 46 passing tests, 2 skipped
+**Current suite:** 101 passing tests, 1 skipped
 
 ## Development
 
@@ -224,7 +224,7 @@ PYTHONPATH=src pytest tests/unit/test_validation_simple.py -q
 - ✅ Path traversal prevention
 - ✅ Custom exception classes with context
 - ✅ Function refactoring (73% size reduction)
-- ✅ Comprehensive test coverage (27 tests)
+- ✅ Comprehensive test coverage (101 tests)
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed change history.
 
@@ -253,7 +253,7 @@ See LICENSE file for details.
 
 The project uses GitHub Actions for automated testing, security scanning, and container builds:
 
-- **Python Tests** - 27 tests across Python 3.10-3.13
+- **Python Tests** - 101 tests across Python 3.10-3.13
 - **Security Scans** - Bandit, Safety, CodeQL, Trivy (weekly + on PR)
 - **Container Builds** - Docker/Podman builds with vulnerability scanning
 - **Code Quality** - Linting, complexity checks, type checking

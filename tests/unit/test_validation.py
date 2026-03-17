@@ -4,18 +4,19 @@ Tests for validation utilities
 """
 
 import pytest
+
 from imageset_generator.validation import (
-    validate_catalog_url,
-    validate_version,
-    validate_channel,
+    ValidationError,
     safe_path_component,
-    ValidationError
+    validate_catalog_url,
+    validate_channel,
+    validate_version,
 )
 
 
 class TestCatalogURLValidation:
     """Test catalog URL validation"""
-    
+
     def test_valid_catalog_urls(self):
         """Test valid catalog URL patterns"""
         valid_urls = [
@@ -26,7 +27,7 @@ class TestCatalogURLValidation:
         ]
         for url in valid_urls:
             assert validate_catalog_url(url) == url
-    
+
     def test_invalid_catalog_urls(self):
         """Test invalid catalog URLs are rejected"""
         invalid_urls = [
@@ -40,12 +41,12 @@ class TestCatalogURLValidation:
         for url in invalid_urls:
             with pytest.raises(ValidationError):
                 validate_catalog_url(url)
-    
+
     def test_none_catalog_url(self):
         """Test None raises ValidationError"""
         with pytest.raises(ValidationError):
             validate_catalog_url(None)
-    
+
     def test_whitespace_trimming(self):
         """Test leading/trailing whitespace is trimmed"""
         url = "  registry.redhat.io/redhat/redhat-operator-index  "
@@ -55,13 +56,13 @@ class TestCatalogURLValidation:
 
 class TestVersionValidation:
     """Test version string validation"""
-    
+
     def test_valid_versions(self):
         """Test valid version patterns"""
         valid_versions = ["4.16", "4.17", "4.18", "4.19", "4.20"]
         for version in valid_versions:
             assert validate_version(version) == version
-    
+
     def test_invalid_versions(self):
         """Test invalid version formats are rejected"""
         invalid_versions = [
@@ -76,7 +77,7 @@ class TestVersionValidation:
         for version in invalid_versions:
             with pytest.raises(ValidationError):
                 validate_version(version)
-    
+
     def test_whitespace_trimming(self):
         """Test version whitespace trimming"""
         assert validate_version("  4.16  ") == "4.16"
@@ -84,7 +85,7 @@ class TestVersionValidation:
 
 class TestChannelValidation:
     """Test channel string validation"""
-    
+
     def test_valid_channels(self):
         """Test valid channel patterns"""
         valid_channels = [
@@ -95,7 +96,7 @@ class TestChannelValidation:
         ]
         for channel in valid_channels:
             assert validate_channel(channel) == channel
-    
+
     def test_invalid_channels(self):
         """Test invalid channel formats are rejected"""
         invalid_channels = [
@@ -112,7 +113,7 @@ class TestChannelValidation:
 
 class TestPathComponentValidation:
     """Test path component validation for traversal prevention"""
-    
+
     def test_valid_components(self):
         """Test valid path components"""
         valid_components = [
@@ -123,7 +124,7 @@ class TestPathComponentValidation:
         ]
         for component in valid_components:
             assert safe_path_component(component) == component
-    
+
     def test_traversal_attempts(self):
         """Test directory traversal attempts are blocked"""
         traversal_attempts = [
@@ -136,7 +137,7 @@ class TestPathComponentValidation:
         for attempt in traversal_attempts:
             with pytest.raises(ValidationError):
                 safe_path_component(attempt)
-    
+
     def test_special_characters(self):
         """Test special characters are rejected"""
         invalid_components = [

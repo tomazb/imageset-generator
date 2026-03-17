@@ -5,17 +5,20 @@ Handles creation, monitoring, and management of Kubernetes Jobs
 for executing oc-mirror in disconnected environments.
 """
 
+import logging
 import os
 import re
-import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+
 import yaml
 
 try:
-    from kubernetes import client, config as k8s_config
+    from kubernetes import client
+    from kubernetes import config as k8s_config
     from kubernetes.client.rest import ApiException
+
     KUBERNETES_AVAILABLE = True
 except ImportError:
     KUBERNETES_AVAILABLE = False
@@ -44,7 +47,7 @@ class KubernetesManager:
 
         self.config = kubernetes_config
         self.dry_run = dry_run
-        self.namespace = kubernetes_config.get('namespace', 'default')
+        self.namespace = kubernetes_config.get("namespace", "default")
 
         # Validate required configuration
         self._validate_config()
@@ -72,46 +75,51 @@ class KubernetesManager:
             ValueError: If required configuration is missing or invalid
         """
         # Check job configuration
-        job_config = self.config.get('job')
+        job_config = self.config.get("job")
         if not job_config:
             raise ValueError("Missing required 'job' configuration section")
         if not isinstance(job_config, dict):
             raise ValueError("'job' configuration must be a dictionary")
-        if 'name_prefix' not in job_config:
+        if "name_prefix" not in job_config:
             raise ValueError("Missing required 'job.name_prefix' configuration")
 
         # Check config_map configuration
-        config_map = self.config.get('config_map')
+        config_map = self.config.get("config_map")
         if not config_map:
             raise ValueError("Missing required 'config_map' configuration section")
         if not isinstance(config_map, dict):
             raise ValueError("'config_map' configuration must be a dictionary")
-        if 'name_prefix' not in config_map:
+        if "name_prefix" not in config_map:
             raise ValueError("Missing required 'config_map.name_prefix' configuration")
 
         # Check registry_credentials configuration
-        registry_creds = self.config.get('registry_credentials')
+        registry_creds = self.config.get("registry_credentials")
         if not registry_creds:
-            raise ValueError("Missing required 'registry_credentials' configuration section")
+            raise ValueError(
+                "Missing required 'registry_credentials' configuration section"
+            )
         if not isinstance(registry_creds, dict):
-            raise ValueError("'registry_credentials' configuration must be a dictionary")
-        if 'secret_name' not in registry_creds:
-            raise ValueError("Missing required 'registry_credentials.secret_name' configuration")
-        if 'mount_path' not in registry_creds:
-            raise ValueError("Missing required 'registry_credentials.mount_path' configuration")
+            raise ValueError(
+                "'registry_credentials' configuration must be a dictionary"
+            )
+        if "secret_name" not in registry_creds:
+            raise ValueError(
+                "Missing required 'registry_credentials.secret_name' configuration"
+            )
+        if "mount_path" not in registry_creds:
+            raise ValueError(
+                "Missing required 'registry_credentials.mount_path' configuration"
+            )
 
         # Check storage configuration
-        storage = self.config.get('storage')
+        storage = self.config.get("storage")
         if storage and not isinstance(storage, dict):
             raise ValueError("'storage' configuration must be a dictionary")
 
         logger.debug("Configuration validation passed")
 
     def create_mirror_job(
-        self,
-        version: str,
-        imageset_config: str,
-        job_name: Optional[str] = None
+        self, version: str, imageset_config: str, job_name: Optional[str] = None
     ) -> Tuple[str, Dict[str, Any]]:
         """
         Create a Kubernetes Job to run oc-mirror
@@ -125,8 +133,8 @@ class KubernetesManager:
             Tuple of (job_name, job_metadata)
         """
         if job_name is None:
-            timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-            name_prefix = self.config.get('job', {}).get('name_prefix')
+            timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+            name_prefix = self.config.get("job", {}).get("name_prefix")
             if not name_prefix:
                 raise ValueError("Missing required 'job.name_prefix' configuration")
             job_name = f"{name_prefix}-{timestamp}"
@@ -148,18 +156,19 @@ class KubernetesManager:
 
             # Create the Job
             job = self.batch_v1.create_namespaced_job(
-                namespace=self.namespace,
-                body=job_manifest
+                namespace=self.namespace, body=job_manifest
             )
 
-            logger.info(f"Created Kubernetes Job: {job_name} in namespace {self.namespace}")
+            logger.info(
+                f"Created Kubernetes Job: {job_name} in namespace {self.namespace}"
+            )
 
             metadata = {
                 "name": job_name,
                 "namespace": self.namespace,
                 "uid": job.metadata.uid,
                 "creation_timestamp": job.metadata.creation_timestamp.isoformat(),
-                "config_map": config_map_name
+                "config_map": config_map_name,
             }
 
             return job_name, metadata
@@ -172,7 +181,7 @@ class KubernetesManager:
         self,
         job_name: str,
         poll_interval: int = 30,
-        max_wait_time: Optional[int] = None
+        max_wait_time: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Monitor a Job until completion
@@ -194,8 +203,7 @@ class KubernetesManager:
         while True:
             try:
                 job = self.batch_v1.read_namespaced_job_status(
-                    name=job_name,
-                    namespace=self.namespace
+                    name=job_name, namespace=self.namespace
                 )
 
                 status = job.status
@@ -205,12 +213,14 @@ class KubernetesManager:
                 for condition in conditions:
                     if condition.type == "Complete" and condition.status == "True":
                         elapsed = time.time() - start_time
-                        logger.info(f"Job {job_name} completed successfully in {elapsed:.1f}s")
+                        logger.info(
+                            f"Job {job_name} completed successfully in {elapsed:.1f}s"
+                        )
                         return {
                             "status": "completed",
                             "succeeded": True,
                             "duration": elapsed,
-                            "completion_time": datetime.utcnow().isoformat()
+                            "completion_time": datetime.utcnow().isoformat(),
                         }
 
                     if condition.type == "Failed" and condition.status == "True":
@@ -225,9 +235,13 @@ class KubernetesManager:
                             "succeeded": False,
                             "duration": elapsed,
                             "failure_time": datetime.utcnow().isoformat(),
-                            "reason": condition.reason if condition.reason else "Unknown",
-                            "message": condition.message if condition.message else "No details",
-                            "logs": logs
+                            "reason": (
+                                condition.reason if condition.reason else "Unknown"
+                            ),
+                            "message": (
+                                condition.message if condition.message else "No details"
+                            ),
+                            "logs": logs,
                         }
 
                 # Check timeout
@@ -239,14 +253,16 @@ class KubernetesManager:
                     return {
                         "status": "timeout",
                         "succeeded": False,
-                        "duration": elapsed
+                        "duration": elapsed,
                     }
 
                 # Log progress
                 active = status.active or 0
                 succeeded = status.succeeded or 0
                 failed = status.failed or 0
-                logger.debug(f"Job {job_name} status: active={active}, succeeded={succeeded}, failed={failed}")
+                logger.debug(
+                    f"Job {job_name} status: active={active}, succeeded={succeeded}, failed={failed}"
+                )
 
                 # Wait before next check
                 time.sleep(poll_interval)
@@ -257,7 +273,7 @@ class KubernetesManager:
                     return {
                         "status": "not_found",
                         "succeeded": False,
-                        "error": "Job not found"
+                        "error": "Job not found",
                     }
                 raise
 
@@ -290,7 +306,7 @@ class KubernetesManager:
             self.batch_v1.delete_namespaced_job(
                 name=job_name,
                 namespace=self.namespace,
-                propagation_policy='Foreground' if delete_pods else 'Orphan'
+                propagation_policy="Foreground" if delete_pods else "Orphan",
             )
             logger.info(f"Deleted Job {job_name}")
             return True
@@ -320,7 +336,7 @@ class KubernetesManager:
 
             for job in jobs.items:
                 # Check if job matches our prefix
-                name_prefix = self.config.get('job', {}).get('name_prefix')
+                name_prefix = self.config.get("job", {}).get("name_prefix")
                 if not name_prefix or not job.metadata.name.startswith(name_prefix):
                     continue
 
@@ -337,9 +353,7 @@ class KubernetesManager:
                     if deleted:
                         deleted_count += 1
                     else:
-                        logger.warning(
-                            f"Failed to delete old job {job.metadata.name}"
-                        )
+                        logger.warning(f"Failed to delete old job {job.metadata.name}")
 
             logger.info(f"Cleaned up {deleted_count} old jobs")
             return deleted_count
@@ -350,36 +364,39 @@ class KubernetesManager:
 
     def _create_config_map(self, job_name: str, imageset_config: str) -> str:
         """Create ConfigMap with imageset configuration"""
-        config_map_prefix = self.config.get('config_map', {}).get('name_prefix')
+        config_map_prefix = self.config.get("config_map", {}).get("name_prefix")
         if not config_map_prefix:
             raise ValueError("Missing required 'config_map.name_prefix' configuration")
         config_map_name = f"{config_map_prefix}-{job_name}"
 
         config_map = client.V1ConfigMap(
             metadata=client.V1ObjectMeta(name=config_map_name),
-            data={"imageset-config.yaml": imageset_config}
+            data={"imageset-config.yaml": imageset_config},
         )
 
         if not self.dry_run:
             self.core_v1.create_namespaced_config_map(
-                namespace=self.namespace,
-                body=config_map
+                namespace=self.namespace, body=config_map
             )
             logger.info(f"Created ConfigMap {config_map_name}")
 
         return config_map_name
 
-    def _build_job_manifest(self, job_name: str, config_map_name: str, version: str) -> Dict:
+    def _build_job_manifest(
+        self, job_name: str, config_map_name: str, version: str
+    ) -> Dict:
         """Build Kubernetes Job manifest"""
-        job_config = self.config.get('job', {})
+        job_config: Dict[str, Any] = self.config.get("job", {})
         if not job_config:
             raise ValueError("Missing required 'job' configuration section")
-        storage_config = self.config.get('storage', {})
-        registry_config = self.config.get('registry_credentials', {})
+        storage_config: Dict[str, Any] = self.config.get("storage", {})
+        registry_config = self.config.get("registry_credentials", {})
         if not registry_config:
-            raise ValueError("Missing required 'registry_credentials' configuration section")
+            raise ValueError(
+                "Missing required 'registry_credentials' configuration section"
+            )
 
-        registry_mount = registry_config.get('mount_path', '/etc/containers')
+        registry_mount = registry_config.get("mount_path", "/etc/containers")
         registry_mount = os.path.expandvars(registry_mount or "")
         if not registry_mount or re.search(r"\$\{[^}]+\}", registry_mount):
             registry_mount = "/etc/containers"
@@ -388,80 +405,78 @@ class KubernetesManager:
 
         # Build volumes
         volumes = [
-            {
-                "name": "imageset-config",
-                "configMap": {"name": config_map_name}
-            },
+            {"name": "imageset-config", "configMap": {"name": config_map_name}},
             {
                 "name": "registry-credentials",
-                "secret": {"secretName": registry_config.get('secret_name', 'redhat-registry-pull-secret')}
-            }
+                "secret": {
+                    "secretName": registry_config.get(
+                        "secret_name", "redhat-registry-pull-secret"
+                    )
+                },
+            },
         ]
 
         # Build volume mounts
         volume_mounts = [
-            {
-                "name": "imageset-config",
-                "mountPath": "/config",
-                "readOnly": True
-            },
+            {"name": "imageset-config", "mountPath": "/config", "readOnly": True},
             {
                 "name": "registry-credentials",
                 "mountPath": registry_mount,
-                "readOnly": True
-            }
+                "readOnly": True,
+            },
         ]
 
         # Add storage volume and mount
-        if storage_config.get('pvc', {}).get('enabled'):
-            pvc_name = storage_config.get('pvc', {}).get('name')
+        if storage_config.get("pvc", {}).get("enabled"):
+            pvc_name = storage_config.get("pvc", {}).get("name")
             if not pvc_name:
-                raise ValueError("Missing required 'storage.pvc.name' configuration when PVC is enabled")
-            volumes.append({
-                "name": "mirror-storage",
-                "persistentVolumeClaim": {
-                    "claimName": pvc_name
+                raise ValueError(
+                    "Missing required 'storage.pvc.name' configuration when PVC is enabled"
+                )
+            volumes.append(
+                {
+                    "name": "mirror-storage",
+                    "persistentVolumeClaim": {"claimName": pvc_name},
                 }
-            })
+            )
         else:
-            volumes.append({
-                "name": "mirror-storage",
-                "emptyDir": {}
-            })
+            volumes.append({"name": "mirror-storage", "emptyDir": {}})
 
-        storage_mount_path = storage_config.get('mount_path', '/mirror')
-        volume_mounts.append({
-            "name": "mirror-storage",
-            "mountPath": storage_mount_path
-        })
+        storage_mount_path = storage_config.get("mount_path", "/mirror")
+        volume_mounts.append(
+            {"name": "mirror-storage", "mountPath": storage_mount_path}
+        )
 
         # Build oc-mirror command
         command = [
             "/bin/bash",
             "-c",
-            f"oc-mirror --v2 --config /config/imageset-config.yaml file://{storage_mount_path}"
+            f"oc-mirror --v2 --config /config/imageset-config.yaml file://{storage_mount_path}",
         ]
 
         # Build container spec
-        image = job_config.get('image')
+        image = job_config.get("image")
         if not image:
             raise ValueError("Missing required 'job.image' configuration")
-        
+
         container = {
             "name": "oc-mirror",
             "image": image,
-            "imagePullPolicy": job_config.get('image_pull_policy', 'IfNotPresent'),
+            "imagePullPolicy": job_config.get("image_pull_policy", "IfNotPresent"),
             "command": command,
             "volumeMounts": volume_mounts,
-            "resources": job_config.get('resources', {}),
+            "resources": job_config.get("resources", {}),
             "env": [
                 {"name": "OCP_VERSION", "value": version},
-                {"name": "REGISTRY_AUTH_FILE", "value": f"{registry_mount}/.dockerconfigjson"}
-            ]
+                {
+                    "name": "REGISTRY_AUTH_FILE",
+                    "value": f"{registry_mount}/.dockerconfigjson",
+                },
+            ],
         }
 
         # Build Job manifest
-        manifest = {
+        manifest: Dict[str, Any] = {
             "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": {
@@ -469,36 +484,35 @@ class KubernetesManager:
                 "labels": {
                     "app": "imageset-mirror",
                     "version": version,
-                    "managed-by": "imageset-automation"
+                    "managed-by": "imageset-automation",
                 },
                 "annotations": {
                     "imageset.automation/version": version,
-                    "imageset.automation/created-at": datetime.utcnow().isoformat()
-                }
+                    "imageset.automation/created-at": datetime.utcnow().isoformat(),
+                },
             },
             "spec": {
-                "backoffLimit": job_config.get('backoff_limit', 3),
-                "ttlSecondsAfterFinished": job_config.get('ttl_seconds_after_finished', 86400),
+                "backoffLimit": job_config.get("backoff_limit", 3),
+                "ttlSecondsAfterFinished": job_config.get(
+                    "ttl_seconds_after_finished", 86400
+                ),
                 "template": {
-                    "metadata": {
-                        "labels": {
-                            "app": "imageset-mirror",
-                            "job": job_name
-                        }
-                    },
+                    "metadata": {"labels": {"app": "imageset-mirror", "job": job_name}},
                     "spec": {
-                        "restartPolicy": job_config.get('restart_policy', 'OnFailure'),
-                        "serviceAccountName": self.config.get('service_account'),
+                        "restartPolicy": job_config.get("restart_policy", "OnFailure"),
+                        "serviceAccountName": self.config.get("service_account"),
                         "containers": [container],
-                        "volumes": volumes
-                    }
-                }
-            }
+                        "volumes": volumes,
+                    },
+                },
+            },
         }
 
         # Add image pull secrets if configured
-        if job_config.get('image_pull_secrets'):
-            manifest['spec']['template']['spec']['imagePullSecrets'] = job_config['image_pull_secrets']
+        if job_config.get("image_pull_secrets"):
+            manifest["spec"]["template"]["spec"]["imagePullSecrets"] = job_config[
+                "image_pull_secrets"
+            ]
 
         return manifest
 
@@ -524,8 +538,7 @@ class KubernetesManager:
         try:
             # Find pods for this job
             pods = self.core_v1.list_namespaced_pod(
-                namespace=self.namespace,
-                label_selector=f"job={job_name}"
+                namespace=self.namespace, label_selector=f"job={job_name}"
             )
 
             if not pods.items:
@@ -538,11 +551,13 @@ class KubernetesManager:
                     logs = self.core_v1.read_namespaced_pod_log(
                         name=pod.metadata.name,
                         namespace=self.namespace,
-                        tail_lines=tail_lines
+                        tail_lines=tail_lines,
                     )
                     all_logs.append(f"=== Pod: {pod.metadata.name} ===\n{logs}")
                 except ApiException as e:
-                    all_logs.append(f"=== Pod: {pod.metadata.name} ===\nFailed to retrieve logs: {e}")
+                    all_logs.append(
+                        f"=== Pod: {pod.metadata.name} ===\nFailed to retrieve logs: {e}"
+                    )
 
             return "\n\n".join(all_logs)
 

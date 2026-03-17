@@ -11,20 +11,18 @@ Usage:
     python generator.py --config config.json
 """
 
-
 import argparse
-import yaml
-import json
-from typing import List, Dict, Any
-from datetime import datetime, timezone
-import sys
-import os
 import re
+import sys
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 
 class ImageSetGenerator:
     """Generator for OpenShift ImageSetConfiguration files"""
-    
+
     def __init__(self):
         self.config = {
             "apiVersion": "mirror.openshift.io/v2alpha1",
@@ -33,21 +31,18 @@ class ImageSetGenerator:
                 "name": "openshift-imageset",
                 "labels": {
                     "generated-by": "imageset-generator",
-                    "generated-at": datetime.now(timezone.utc).isoformat()
-                }
+                    "generated-at": datetime.now(timezone.utc).isoformat(),
+                },
             },
             "spec": {
                 # 'archiveSize' will only be set if explicitly requested
                 "mirror": {
-                    "platform": {
-                        "channels": [],
-                        "graph": True
-                    },
+                    "platform": {"channels": [], "graph": True},
                     "operators": [],
                     "additionalImages": [],
-                    "helm": {}
+                    "helm": {},
                 }
-            }
+            },
         }
 
     def set_archive_size(self, size: int):
@@ -55,11 +50,18 @@ class ImageSetGenerator:
         Set the archiveSize in the configuration (optional)
         """
         self.config["spec"]["archiveSize"] = size
-    
-    def add_ocp_versions(self, versions: List[str] = None, channel: List[str] = "stable-4.14", min_version: str = None, max_version: str = None, graph: bool = True):
+
+    def add_ocp_versions(
+        self,
+        versions: Optional[List[str]] = None,
+        channel: str = "stable-4.14",
+        min_version: Optional[str] = None,
+        max_version: Optional[str] = None,
+        graph: bool = True,
+    ):
         """
         Add OpenShift platform versions to the configuration
-        
+
         Args:
             versions: List of OCP version strings (e.g., ["4.14.1", "4.14.2"]) - legacy support
             channel: OCP channel name (default: "stable-4.14")
@@ -72,11 +74,8 @@ class ImageSetGenerator:
         # Handle legacy versions list or new min/max approach
         if min_version or max_version:
             # Use the new min/max approach
-            platform_config = {
-                "name": channel,
-                "type": "ocp"
-            }
-            
+            platform_config = {"name": channel, "type": "ocp"}
+
             if min_version:
                 platform_config["minVersion"] = min_version
             if max_version:
@@ -87,19 +86,26 @@ class ImageSetGenerator:
             if channel == "stable-4.14" and versions:
                 major_minor = ".".join(versions[0].split(".")[:2])
                 channel = f"stable-{major_minor}"
-            
+
             platform_config = {
                 "name": channel,
                 "type": "ocp",
                 "minVersion": min(versions),
-                "maxVersion": max(versions)
+                "maxVersion": max(versions),
             }
         else:
             return  # Nothing to add
-        
+
         self.config["spec"]["mirror"]["platform"]["channels"].append(platform_config)
-    
-    def add_operators(self, operators: List[Any], catalog: str = "registry.redhat.io/redhat/redhat-operator-index", channels: Dict[str, str] = None, ocp_version: str = None,newest_channel: Dict[str, str] = None):
+
+    def add_operators(
+        self,
+        operators: List[Any],
+        catalog: str = "registry.redhat.io/redhat/redhat-operator-index",
+        channels: Optional[Dict[str, str]] = None,
+        ocp_version: Optional[str] = None,
+        newest_channel: Optional[Dict[str, str]] = None,
+    ):
         """
         Add operators to the configuration
         Args:
@@ -120,7 +126,7 @@ class ImageSetGenerator:
         # Common operator mappings
         operator_mappings = {
             "logging": "cluster-logging",
-            "logging-operator": "cluster-logging", 
+            "logging-operator": "cluster-logging",
             "monitoring": "cluster-monitoring-operator",
             "cluster-monitoring": "cluster-monitoring-operator",
             "service-mesh": "servicemeshoperator",
@@ -136,7 +142,7 @@ class ImageSetGenerator:
             "ceph": "odf-operator",
             "elasticsearch": "elasticsearch-operator",
             "jaeger": "jaeger-product",
-            "kiali": "kiali-ossm"
+            "kiali": "kiali-ossm",
         }
         # Ensure catalog includes OCP version as :v<version> if provided and not already present
         if ocp_version:
@@ -145,6 +151,8 @@ class ImageSetGenerator:
             catalog = f"{catalog}:v{ocp_version}"
         operator_packages = []
         for op in operators:
+            operator_entry: Dict[str, Any]
+            channel: Optional[str]
             # Accept both string and dict for backward compatibility
             if isinstance(op, str):
                 package_name = operator_mappings.get(op.lower(), op)
@@ -155,7 +163,8 @@ class ImageSetGenerator:
                         operator_entry["channels"] = [{"name": channel}]
                 operator_packages.append(operator_entry)
             elif isinstance(op, dict):
-                package_name = operator_mappings.get(op.get("name", "").lower(), op.get("name", ""))
+                op_name_raw: str = op.get("name", "")
+                package_name = operator_mappings.get(op_name_raw.lower(), op_name_raw)
                 operator_entry = {"name": package_name}
 
                 # Handle selected versions if present
@@ -175,7 +184,8 @@ class ImageSetGenerator:
                 # Add channel if present
                 channel = None
                 if channels:
-                    channel = channels.get(op.get("name")) or channels.get(package_name)
+                    op_name = op.get("name", "")
+                    channel = channels.get(op_name) or channels.get(package_name)
                 if not channel:
                     channel = op.get("channel")
 
@@ -190,54 +200,47 @@ class ImageSetGenerator:
                         operator_entry["defaultChannel"] = newest_channel[package_name]
                     else:
                         operator_entry["defaultChannel"] = channel_list[-1]
-                    
 
                 operator_packages.append(operator_entry)
-        operator_config = {
-            "catalog": catalog,
-            "packages": operator_packages
-        }
+        operator_config = {"catalog": catalog, "packages": operator_packages}
         self.config["spec"]["mirror"]["operators"].append(operator_config)
-    
+
     def add_additional_images(self, images: List[str]):
         """
         Add additional container images to mirror
-        
+
         Args:
             images: List of container image references
         """
         if not images:
             return
-            
+
         for image in images:
-            self.config["spec"]["mirror"]["additionalImages"].append({
-                "name": image
-            })
-    
+            self.config["spec"]["mirror"]["additionalImages"].append({"name": image})
+
     def add_helm_charts(self, charts: List[Dict[str, str]]):
         """
         Add Helm charts to the configuration
-        
+
         Args:
             charts: List of chart dictionaries with 'name' and 'repository' keys
         """
         if not charts:
             return
-            
+
         for chart in charts:
             repo_name = chart.get("repository", "").replace("/", "-").replace(":", "-")
             if repo_name not in self.config["spec"]["mirror"]["helm"]:
                 self.config["spec"]["mirror"]["helm"][repo_name] = []
-            
-            self.config["spec"]["mirror"]["helm"][repo_name].append({
-                "name": chart["name"],
-                "version": chart.get("version", "")
-            })
-    
+
+            self.config["spec"]["mirror"]["helm"][repo_name].append(
+                {"name": chart["name"], "version": chart.get("version", "")}
+            )
+
     def set_kubevirt_container(self, enable: bool = True):
         """
         Enable/disable KubeVirt container mirroring
-        
+
         Args:
             enable: Whether to enable KubeVirt container mirroring (default: True)
         """
@@ -247,12 +250,12 @@ class ImageSetGenerator:
             # Remove the key if it exists
             if "kubeVirtContainer" in self.config["spec"]["mirror"]["platform"]:
                 del self.config["spec"]["mirror"]["platform"]["kubeVirtContainer"]
-    
+
     def generate_yaml(self) -> str:
         """Generate the YAML configuration string with no 'spec' or 'metadata' section; metadata as YAML comments."""
         config_copy = dict(self.config)
-        spec = config_copy.pop('spec', {})
-        metadata = config_copy.pop('metadata', {})
+        spec = config_copy.pop("spec", {})
+        metadata = config_copy.pop("metadata", {})
         # Move all keys from spec to the root
         config_copy.update(spec)
         # Prepare YAML comments for metadata
@@ -265,11 +268,15 @@ class ImageSetGenerator:
                 else:
                     comment_lines.append(f"# {k}: {v}")
         yaml_body = yaml.dump(config_copy, default_flow_style=False, sort_keys=False)
-        return ("\n".join(comment_lines) + "\n" + yaml_body) if comment_lines else yaml_body
-    
+        return (
+            ("\n".join(comment_lines) + "\n" + yaml_body)
+            if comment_lines
+            else yaml_body
+        )
+
     def save_to_file(self, filename: str):
         """Save the configuration to a YAML file"""
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             f.write(self.generate_yaml())
         print(f"ImageSetConfiguration saved to {filename}")
 
@@ -282,82 +289,82 @@ def main():
 Examples:
   # Generate from command line arguments
   python generator.py --ocp-versions 4.14.1,4.14.2 --operators logging,monitoring,pipelines
-  
+
   # Specify custom output file
   python generator.py --ocp-versions 4.14.1 --operators logging --output my-imageset.yaml
-        """
+        """,
     )
-    
+
     parser.add_argument(
         "--ocp-versions",
         type=str,
-        help="Comma-separated list of OCP versions (e.g., '4.14.1,4.14.2')"
+        help="Comma-separated list of OCP versions (e.g., '4.14.1,4.14.2')",
     )
-    
+
     parser.add_argument(
-        "--ocp-channel", 
+        "--ocp-channel",
         type=str,
         default="stable-4.14",
-        help="OCP channel name (default: stable-4.14)"
+        help="OCP channel name (default: stable-4.14)",
     )
-    
+
     parser.add_argument(
         "--operators",
         type=str,
-        help="Comma-separated list of operator names/suggestions (e.g., 'logging,monitoring,pipelines')"
+        help="Comma-separated list of operator names/suggestions (e.g., 'logging,monitoring,pipelines')",
     )
-    
+
     parser.add_argument(
         "--operator-catalog",
         type=str,
         default="registry.redhat.io/redhat/redhat-operator-index",
-        help="Operator catalog source"
+        help="Operator catalog source",
     )
-    
+
     parser.add_argument(
         "--additional-images",
         type=str,
-        help="Comma-separated list of additional container images"
+        help="Comma-separated list of additional container images",
     )
-    
+
     parser.add_argument(
         "--output",
         type=str,
         default="imageset-config.yaml",
-        help="Output file name (default: imageset-config.yaml)"
+        help="Output file name (default: imageset-config.yaml)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Initialize generator
     generator = ImageSetGenerator()
-    
+
     # Load from command line arguments
     if not args.ocp_versions and not args.operators:
         print("Error: Either --ocp-versions or --operators must be specified")
         parser.print_help()
         sys.exit(1)
-    
+
     # Add OCP versions
     if args.ocp_versions:
         versions = [v.strip() for v in args.ocp_versions.split(",")]
         generator.add_ocp_versions(versions, args.ocp_channel)
-    
+
     # Add operators
     if args.operators:
         operators = [op.strip() for op in args.operators.split(",")]
         generator.add_operators(operators, args.operator_catalog)
-    
+
     # Add additional images
     if args.additional_images:
         images = [img.strip() for img in args.additional_images.split(",")]
         generator.add_additional_images(images)
-    
+
     output_file = args.output
-    
+
     # Generate and save the configuration
     generator.save_to_file(output_file)
-    
+
     # Print the generated YAML for review
     print("\nGenerated ImageSetConfiguration:")
     print("=" * 50)

@@ -2,7 +2,7 @@
 """Tests for Cincinnati-based version/channel refresh."""
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -127,12 +127,23 @@ def test_arch_scoped_filename_helper():
 
     # amd64 (default) keeps the original filename for seed-data compat
     assert _arch_scoped_filename("ocp-versions.json", "amd64") == "ocp-versions.json"
-    assert _arch_scoped_filename("channel-releases.json", "amd64") == "channel-releases.json"
+    assert (
+        _arch_scoped_filename("channel-releases.json", "amd64")
+        == "channel-releases.json"
+    )
 
     # Non-amd64 architectures get a scoped filename
-    assert _arch_scoped_filename("ocp-versions.json", "arm64") == "ocp-versions-arm64.json"
-    assert _arch_scoped_filename("channel-releases.json", "s390x") == "channel-releases-s390x.json"
-    assert _arch_scoped_filename("ocp-channels.json", "ppc64le") == "ocp-channels-ppc64le.json"
+    assert (
+        _arch_scoped_filename("ocp-versions.json", "arm64") == "ocp-versions-arm64.json"
+    )
+    assert (
+        _arch_scoped_filename("channel-releases.json", "s390x")
+        == "channel-releases-s390x.json"
+    )
+    assert (
+        _arch_scoped_filename("ocp-channels.json", "ppc64le")
+        == "ocp-channels-ppc64le.json"
+    )
 
 
 @patch("imageset_generator.app._data_write_file")
@@ -140,6 +151,7 @@ def test_arch_scoped_filename_helper():
 def test_refresh_versions_writes_arch_scoped_file(mock_discover, mock_write, client):
     """Refreshing for arm64 should write to ocp-versions-arm64.json, not ocp-versions.json."""
     from pathlib import Path
+
     mock_discover.return_value = ["4.16"]
     mock_write.return_value = Path("/tmp/fake-ocp-versions-arm64.json")
 
@@ -154,6 +166,7 @@ def test_refresh_versions_writes_arch_scoped_file(mock_discover, mock_write, cli
 def test_refresh_releases_writes_arch_scoped_file(mock_releases, mock_write, client):
     """Refreshing releases for s390x should write to channel-releases-s390x.json."""
     from pathlib import Path
+
     mock_releases.return_value = ["4.16.0"]
     mock_write.return_value = Path("/tmp/fake-channel-releases-s390x.json")
 
@@ -171,6 +184,7 @@ def test_refresh_releases_writes_arch_scoped_file(mock_releases, mock_write, cli
 def test_refresh_channels_writes_arch_scoped_file(mock_channels, mock_write, client):
     """Refreshing channels for ppc64le should write to ocp-channels-ppc64le.json."""
     from pathlib import Path
+
     mock_channels.return_value = ["stable-4.16"]
     mock_write.return_value = Path("/tmp/fake-ocp-channels-ppc64le.json")
 
@@ -184,10 +198,11 @@ def test_refresh_channels_writes_arch_scoped_file(mock_channels, mock_write, cli
 def test_get_releases_reads_arch_scoped_file(mock_read, client, tmp_path):
     """GET /api/releases/<v>/<ch>?arch=arm64 should read channel-releases-arm64.json."""
     import json
+
     cache_file = tmp_path / "channel-releases-arm64.json"
-    cache_file.write_text(json.dumps({
-        "channel_releases": {"stable-4.16": ["4.16.0", "4.16.1"]}
-    }))
+    cache_file.write_text(
+        json.dumps({"channel_releases": {"stable-4.16": ["4.16.0", "4.16.1"]}})
+    )
     mock_read.return_value = cache_file
 
     response = client.get("/api/releases/4.16/stable-4.16?arch=arm64")
@@ -202,10 +217,11 @@ def test_get_releases_reads_arch_scoped_file(mock_read, client, tmp_path):
 def test_get_channels_reads_arch_scoped_file(mock_read, client, tmp_path):
     """GET /api/channels/<v>?arch=ppc64le should read ocp-channels-ppc64le.json."""
     import json
+
     cache_file = tmp_path / "ocp-channels-ppc64le.json"
-    cache_file.write_text(json.dumps({
-        "channels": {"4.16": ["stable-4.16", "fast-4.16"]}
-    }))
+    cache_file.write_text(
+        json.dumps({"channels": {"4.16": ["stable-4.16", "fast-4.16"]}})
+    )
     mock_read.return_value = cache_file
 
     response = client.get("/api/channels/4.16?arch=ppc64le")
@@ -217,9 +233,7 @@ def test_get_channels_reads_arch_scoped_file(mock_read, client, tmp_path):
 
 
 @patch("imageset_generator.app.load_operators_from_file")
-def test_operators_list_cache_miss_returns_refreshed_operators(
-    mock_load, client
-):
+def test_operators_list_cache_miss_returns_refreshed_operators(mock_load, client):
     """When cached operators file is empty, /api/operators/list should call
     _refresh_operators_data and return the operator list as JSON."""
     expected_operators = [
@@ -309,11 +323,17 @@ def test_get_catalogs_patch_version_normalizes_to_major_minor(client, tmp_path):
         stdout = "{}"
         stderr = ""
 
-    with patch("imageset_generator.app._data_read_file",
-               return_value=tmp_path / "nonexistent" / "catalogs.json"), \
-         patch("imageset_generator.app._data_write_file",
-               return_value=tmp_path / "catalogs.json"), \
-         patch("imageset_generator.app.subprocess.run", return_value=OkProcess()):
+    with (
+        patch(
+            "imageset_generator.app._data_read_file",
+            return_value=tmp_path / "nonexistent" / "catalogs.json",
+        ),
+        patch(
+            "imageset_generator.app._data_write_file",
+            return_value=tmp_path / "catalogs.json",
+        ),
+        patch("imageset_generator.app.subprocess.run", return_value=OkProcess()),
+    ):
 
         response = client.get("/api/operators/catalogs/4.17.9")
 
@@ -327,18 +347,25 @@ def test_list_catalogs_patch_version_reads_normalized_cache(client, tmp_path):
     """GET /api/operators/catalogs/4.17.9/list should read catalogs-4.17.json,
     not catalogs-4.17.9.json, and index the dict by '4.17'."""
     cache_file = tmp_path / "catalogs-4.17.json"
-    cache_file.write_text(json.dumps({
-        "4.17": [
-            {"name": "Red Hat Operators",
-             "url": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
-             "validated": True}
-        ]
-    }))
+    cache_file.write_text(
+        json.dumps(
+            {
+                "4.17": [
+                    {
+                        "name": "Red Hat Operators",
+                        "url": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+                        "validated": True,
+                    }
+                ]
+            }
+        )
+    )
 
     def fake_read(filename):
         # Only catalogs-4.17.json should be requested, not catalogs-4.17.9.json
-        assert filename == "catalogs-4.17.json", \
-            f"Expected catalogs-4.17.json but got {filename}"
+        assert (
+            filename == "catalogs-4.17.json"
+        ), f"Expected catalogs-4.17.json but got {filename}"
         return cache_file
 
     with patch("imageset_generator.app._data_read_file", side_effect=fake_read):
@@ -355,11 +382,9 @@ def test_list_catalogs_patch_version_reads_normalized_cache(client, tmp_path):
 def test_get_ocp_versions_static_reads_arch_scoped_file(mock_read, client, tmp_path):
     """GET /api/ocp-versions?arch=arm64 should read ocp-versions-arm64.json."""
     cache_file = tmp_path / "ocp-versions-arm64.json"
-    cache_file.write_text(json.dumps({
-        "releases": ["4.16", "4.17"],
-        "count": 2,
-        "source": "cincinnati"
-    }))
+    cache_file.write_text(
+        json.dumps({"releases": ["4.16", "4.17"], "count": 2, "source": "cincinnati"})
+    )
     mock_read.return_value = cache_file
 
     response = client.get("/api/ocp-versions?arch=arm64")
