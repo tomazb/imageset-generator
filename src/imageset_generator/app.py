@@ -1201,8 +1201,10 @@ def get_operator_catalogs(version):
         }), 500
 
     # Extract the catalog list for this version from the version-keyed dict
+    # Normalize to major.minor since refresh_catalogs_for_version() uses that as key
+    version_key = '.'.join(version.split('.')[:2])
     all_catalogs = catalogs.json.get("catalogs", {})
-    available_catalogs = all_catalogs.get(version, []) if isinstance(all_catalogs, dict) else all_catalogs
+    available_catalogs = all_catalogs.get(version_key, []) if isinstance(all_catalogs, dict) else all_catalogs
     if not available_catalogs:
         app.logger.warning(f"No catalogs found for version {version}")
         return jsonify({
