@@ -1173,7 +1173,7 @@ def get_available_catalogs():
 
         for catalog in BASE_CATALOGS:
             try:
-                cmd = ['skopeo', 'inspect', '--no-tags', f'docker://{catalog["base_url"]}']
+                cmd = ['skopeo', 'list-tags', f'docker://{catalog["base_url"]}']
                 result = subprocess.run(
                     cmd,
                     capture_output=True,

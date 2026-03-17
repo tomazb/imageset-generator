@@ -86,7 +86,7 @@ def test_available_catalogs_endpoint_returns_base_catalogs(monkeypatch):
         stderr = ""
 
     def fake_run(cmd, capture_output, text, timeout):
-        assert cmd[:3] == ["skopeo", "inspect", "--no-tags"]
+        assert cmd[:2] == ["skopeo", "list-tags"]
         assert timeout == 30
         return CompletedProcess()
 
