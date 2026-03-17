@@ -64,15 +64,21 @@ def discover_ocp_versions(arch: str = "amd64") -> list[str]:
     """
     Probe Cincinnati for available OCP minor versions.
 
-    Tries ``stable-4.X`` for X in the configured probe range.
+    Tries each channel prefix (stable, fast, candidate, eus) for each
+    minor in the configured probe range.  A version is included if ANY
+    channel reports nodes, so pre-stable minors are not missed.
     Returns sorted list like ``["4.14", "4.15", "4.16"]``.
     """
+    # Order stable first — most common, avoids redundant API calls
+    prefixes = ["stable", "fast", "candidate", "eus"]
     versions: list[str] = []
     for minor in OCP_MINOR_PROBE_RANGE:
-        channel = f"stable-4.{minor}"
-        data = _query_cincinnati(channel, arch)
-        if data and data.get("nodes"):
-            versions.append(f"4.{minor}")
+        for prefix in prefixes:
+            channel = f"{prefix}-4.{minor}"
+            data = _query_cincinnati(channel, arch)
+            if data and data.get("nodes"):
+                versions.append(f"4.{minor}")
+                break
     versions.sort(key=lambda v: tuple(int(p) for p in v.split(".")))
     return versions
 
