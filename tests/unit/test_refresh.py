@@ -323,6 +323,34 @@ def test_get_catalogs_patch_version_normalizes_to_major_minor(client, tmp_path):
     assert isinstance(payload["catalogs"], list)
 
 
+def test_list_catalogs_patch_version_reads_normalized_cache(client, tmp_path):
+    """GET /api/operators/catalogs/4.17.9/list should read catalogs-4.17.json,
+    not catalogs-4.17.9.json, and index the dict by '4.17'."""
+    cache_file = tmp_path / "catalogs-4.17.json"
+    cache_file.write_text(json.dumps({
+        "4.17": [
+            {"name": "Red Hat Operators",
+             "url": "registry.redhat.io/redhat/redhat-operator-index:v4.17",
+             "validated": True}
+        ]
+    }))
+
+    def fake_read(filename):
+        # Only catalogs-4.17.json should be requested, not catalogs-4.17.9.json
+        assert filename == "catalogs-4.17.json", \
+            f"Expected catalogs-4.17.json but got {filename}"
+        return cache_file
+
+    with patch("imageset_generator.app._data_read_file", side_effect=fake_read):
+        response = client.get("/api/operators/catalogs/4.17.9/list")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert len(payload["catalogs"]) == 1
+    assert payload["catalogs"][0]["name"] == "Red Hat Operators"
+
+
 @patch("imageset_generator.app._data_read_file")
 def test_get_ocp_versions_static_reads_arch_scoped_file(mock_read, client, tmp_path):
     """GET /api/ocp-versions?arch=arm64 should read ocp-versions-arm64.json."""

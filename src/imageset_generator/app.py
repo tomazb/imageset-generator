@@ -888,9 +888,9 @@ def refresh_catalogs_for_version(version=None):
             'timestamp': datetime.now(timezone.utc).isoformat()
         }), 500
 
-    # Write Catalog info to File
+    # Write Catalog info to File (use version_key = major.minor for consistent filenames)
     try:
-        with open(_data_write_file(f"catalogs-{version}.json"), 'w') as f:
+        with open(_data_write_file(f"catalogs-{version_key}.json"), 'w') as f:
             json.dump(discovered_catalogs, f, indent=2)
             f.write("\n")
     except Exception as e:
@@ -1297,12 +1297,15 @@ def get_available_catalogs():
 def list_catalogs_for_version(version):
     """List available catalogs for a specific OCP version from cache or refresh"""
 
+    # Normalize to major.minor for consistent cache filenames and dict keys
+    version_key = '.'.join(version.split('.')[:2])
+
     #Check if catalogs for this version are cached
-    cached_catalogs = load_catalogs_from_file(version)
-    
+    cached_catalogs = load_catalogs_from_file(version_key)
+
     if cached_catalogs is not None:
         # Cache files are version-keyed dicts, e.g. {"4.17": [...]}.
-        catalog_list = cached_catalogs.get(version, []) if isinstance(cached_catalogs, dict) else cached_catalogs
+        catalog_list = cached_catalogs.get(version_key, []) if isinstance(cached_catalogs, dict) else cached_catalogs
         # Filter out unvalidated entries that may exist in stale cache files
         valid_catalogs = [c for c in catalog_list if c.get('validated', False)]
         return jsonify({
