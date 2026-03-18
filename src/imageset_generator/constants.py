@@ -5,8 +5,14 @@ Constants for ImageSet Generator
 Centralized configuration constants for timeouts, ports, patterns, and defaults.
 """
 
+import json
+import logging
 import os
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 
@@ -70,11 +76,76 @@ def get_runtime_data_path(filename: str) -> Path:
     return RUNTIME_DATA_DIR / filename
 
 
+# Cache reliability settings
+CACHE_FILE_MAX_AGE_SECONDS = int(
+    os.environ.get("CACHE_FILE_MAX_AGE_SECONDS", str(24 * 3600))
+)  # Default: 24 hours
+
+# Minimum entry counts for cache files to be considered plausible.
+# Keys are filename prefixes (matched via str.startswith).
+CACHE_MIN_COUNTS: dict[str, int] = {
+    "ocp-versions": 3,
+    "ocp-channels": 1,
+    "channel-releases": 1,
+}
+
+
+def _cache_file_is_fresh(path: Path) -> bool:
+    """Return True if the cache file's embedded timestamp is within max age."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        ts_str = data.get("timestamp")
+        if not ts_str:
+            return False
+        ts = datetime.fromisoformat(ts_str)
+        age = (datetime.now(timezone.utc) - ts).total_seconds()
+        return age < CACHE_FILE_MAX_AGE_SECONDS
+    except Exception:
+        return False
+
+
+def _cache_file_is_plausible(path: Path) -> bool:
+    """Return True if the cache file meets minimum completeness thresholds."""
+    stem = path.stem  # e.g. "ocp-versions" or "ocp-versions-arm64"
+    min_count = None
+    for prefix, threshold in CACHE_MIN_COUNTS.items():
+        if stem.startswith(prefix):
+            min_count = threshold
+            break
+    if min_count is None:
+        return True  # no threshold defined — accept
+
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        # Check common payload keys for entry count
+        for key in ("releases", "channels", "channel_releases"):
+            value = data.get(key)
+            if isinstance(value, (list, dict)) and len(value) >= min_count:
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def get_data_read_path(filename: str) -> Path:
-    """Prefer the writable cache, then packaged seed data."""
+    """Prefer a fresh, plausible writable cache, then packaged seed data."""
     runtime_path = get_runtime_data_path(filename)
     if runtime_path.exists():
-        return runtime_path
+        if not _cache_file_is_fresh(runtime_path):
+            logger.warning(
+                "Runtime cache %s is stale (older than %ds), falling through to seed data",
+                runtime_path,
+                CACHE_FILE_MAX_AGE_SECONDS,
+            )
+        elif not _cache_file_is_plausible(runtime_path):
+            logger.warning(
+                "Runtime cache %s has too few entries, falling through to seed data",
+                runtime_path,
+            )
+        else:
+            return runtime_path
     return get_packaged_data_path(filename)
 
 
@@ -82,6 +153,29 @@ def get_data_write_path(filename: str) -> Path:
     """Return a writable cache file path, creating the directory if needed."""
     RUNTIME_DATA_DIR.mkdir(parents=True, exist_ok=True)
     return get_runtime_data_path(filename)
+
+
+def atomic_json_dump(data: dict, path: Path) -> None:
+    """Write *data* as JSON to *path* atomically via temp-file + rename.
+
+    This prevents readers from ever seeing a truncated or partially-written
+    cache file.  The temp file is created in the same directory so the rename
+    is guaranteed to be atomic on POSIX systems.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        # Clean up the temp file on any failure
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 # Network Timeouts (seconds)
