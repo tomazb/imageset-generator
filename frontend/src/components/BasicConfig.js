@@ -13,6 +13,7 @@ import {
   Grid, GridItem
 } from '@patternfly/react-core';
 import OperatorSearch from './OperatorSearch';
+import { compareVersions } from '../versionUtils';
 
 function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpChannels, channelReleases, onVersionChange, onChannelChange, isLoadingReleases, isLoadingChannels, isLoadingChannelReleases }) {
   // State for operator catalogs
@@ -102,7 +103,8 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
       selectedValue = '';
     }
     // Always update config, even if the same version is selected again
-    updateConfig({ ocp_versions: selectedValue ? [selectedValue] : [] });
+    // Clear channel and min/max selections since they depend on the minor version
+    updateConfig({ ocp_versions: selectedValue ? [selectedValue] : [], ocp_channel: '', ocp_min_version: '', ocp_max_version: '' });
     lastSelectedVersion.current = selectedValue;
     if (onVersionChange && selectedValue) {
       onVersionChange(selectedValue);
@@ -164,7 +166,12 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
       selectedValue = '';
     }
     
-    updateConfig({ ocp_min_version: selectedValue });
+    // If max version is now lower than new min, clear it
+    const updates = { ocp_min_version: selectedValue };
+    if (selectedValue && config.ocp_max_version && compareVersions(config.ocp_max_version, selectedValue) < 0) {
+      updates.ocp_max_version = '';
+    }
+    updateConfig(updates);
   };
 
   const handleMaxVersionChange = (value, event) => {
@@ -337,7 +344,9 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                             : 'Select maximum version...'
                     }
                   />
-                  {Array.isArray(channelReleases) ? channelReleases.map(release => (
+                  {Array.isArray(channelReleases) ? channelReleases
+                    .filter(release => !config.ocp_min_version || compareVersions(release, config.ocp_min_version) >= 0)
+                    .map(release => (
                     <FormSelectOption key={release} value={release} label={release} />
                   )) : null}
                 </FormSelect>

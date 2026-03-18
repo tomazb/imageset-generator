@@ -154,8 +154,13 @@ def test_version_catalog_list_filters_unvalidated_from_cache(monkeypatch, tmp_pa
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["source"] == "static_file"
-    assert len(payload["catalogs"]) == 1
-    assert payload["catalogs"][0]["name"] == "good"
+    # Entries with validated=True and entries missing the key (seed data) are returned;
+    # only entries with explicit validated=False are filtered out.
+    assert len(payload["catalogs"]) == 2
+    names = [c["name"] for c in payload["catalogs"]]
+    assert "good" in names
+    assert "missing" in names
+    assert "bad" not in names
 
 
 def test_version_refresh_excludes_unvalidated_catalogs(monkeypatch):

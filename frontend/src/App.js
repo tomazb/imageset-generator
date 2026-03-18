@@ -23,6 +23,7 @@ import BasicConfig from './components/BasicConfig';
 import AdvancedConfig from './components/AdvancedConfig';
 import PreviewGenerate from './components/PreviewGenerate';
 import StatusBar from './components/StatusBar';
+import { filterReleasesByMinorVersion } from './versionUtils';
 
 // Utility to deeply sanitize config for JSON serialization
 function deepSanitizeConfig(obj) {
@@ -108,8 +109,10 @@ function App() {
     try {
       const response = await axios.get(`${API_BASE}/api/releases/${version}/${channel}`);
       if (response.data.status === 'success') {
-        console.log(`Releases for ${channel}:`, response.data.releases);
-        setChannelReleases(response.data.releases);
+        const selectedMinor = config.ocp_versions?.[0] || '';
+        const filtered = filterReleasesByMinorVersion(response.data.releases, selectedMinor);
+        console.log(`Releases for ${channel}: ${response.data.releases.length} total, ${filtered.length} after filtering to ${selectedMinor}.x`);
+        setChannelReleases(filtered);
       } else {
         console.error('Failed to fetch releases:', response.data.message);
         setChannelReleases([]);

@@ -1581,8 +1581,9 @@ def list_catalogs_for_version(version):
             if isinstance(cached_catalogs, dict)
             else cached_catalogs
         )
-        # Filter out unvalidated entries that may exist in stale cache files
-        valid_catalogs = [c for c in catalog_list if c.get("validated", False)]
+        # Filter out entries explicitly marked as invalid (validated=False).
+        # Seed data has no "validated" key, so default to True for offline-first use.
+        valid_catalogs = [c for c in catalog_list if c.get("validated", True)]
         return jsonify(
             {
                 "status": "success",
