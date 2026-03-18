@@ -27,6 +27,7 @@ from .constants import (
     TIMEOUT_OPM_RENDER,
     TIMEOUT_SKOPEO,
     TLS_VERIFY,
+    atomic_json_dump,
     get_data_read_path,
     get_data_write_path,
 )
@@ -415,20 +416,17 @@ def refresh_versions():
                 500,
             )
 
-        # Save to static file for future use
+        # Save to static file for future use (atomic write)
         app.logger.debug(f"Saving refreshed releases to {static_file_path}")
-        with open(static_file_path, "w") as f:
-            json.dump(
-                {
-                    "releases": releases,
-                    "count": len(releases),
-                    "source": "cincinnati",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                f,
-                indent=2,
-            )
-            f.write("\n")
+        atomic_json_dump(
+            {
+                "releases": releases,
+                "count": len(releases),
+                "source": "cincinnati",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            static_file_path,
+        )
 
     except Exception as e:
         app.logger.error(f"Error refreshing releases: {e}")
@@ -660,19 +658,16 @@ def _refresh_operators_data(catalog, version):
     # Step 4: Parse and combine data
     operators = _parse_operator_data(data_path, channel_path)
 
-    # Step 5: Write final output
-    with open(main_path, "w") as f:
-        json.dump(
-            {
-                "operators": operators,
-                "count": len(operators),
-                "source": "opm",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-            f,
-            indent=2,
-        )
-        f.write("\n")
+    # Step 5: Write final output (atomic write)
+    atomic_json_dump(
+        {
+            "operators": operators,
+            "count": len(operators),
+            "source": "opm",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        Path(main_path),
+    )
 
     # Step 6: Cleanup intermediate files
     _cleanup_intermediate_files(index_path, data_path, channel_path)
@@ -817,20 +812,17 @@ def refresh_ocp_releases(version=None, channel=None):
         # Merge old channels with new ones
         old_channels_releases.update(channels_releases)
 
-        # Save to static file for future use
+        # Save to static file for future use (atomic write)
         app.logger.debug(f"Saving refreshed releases to {static_file_path}")
-        with open(static_file_path, "w") as f:
-            json.dump(
-                {
-                    "channel_releases": old_channels_releases,
-                    "count": len(old_channels_releases),
-                    "source": "cincinnati",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                f,
-                indent=2,
-            )
-            f.write("\n")
+        atomic_json_dump(
+            {
+                "channel_releases": old_channels_releases,
+                "count": len(old_channels_releases),
+                "source": "cincinnati",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            static_file_path,
+        )
 
     except Exception as e:
         app.logger.error(f"Error refreshing releases: {e}")
@@ -930,20 +922,17 @@ def refresh_ocp_channels(version=None):
         for version in version_list:
             old_channels.update({version: channels.get(version, [])})
 
-        # Save to static file for future use
+        # Save to static file for future use (atomic write)
         app.logger.debug(f"Saving refreshed channels to {static_file_path}")
-        with open(static_file_path, "w") as f:
-            json.dump(
-                {
-                    "channels": old_channels,
-                    "count": len(old_channels),
-                    "source": "cincinnati",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                f,
-                indent=2,
-            )
-            f.write("\n")
+        atomic_json_dump(
+            {
+                "channels": old_channels,
+                "count": len(old_channels),
+                "source": "cincinnati",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            static_file_path,
+        )
 
     except Exception as e:
         app.logger.error(f"Error refreshing channels: {e}")
@@ -1076,9 +1065,10 @@ def refresh_catalogs_for_version(version=None):
 
     # Write Catalog info to File (use version_key = major.minor for consistent filenames)
     try:
-        with open(_data_write_file(f"catalogs-{version_key}.json"), "w") as f:
-            json.dump(discovered_catalogs, f, indent=2)
-            f.write("\n")
+        atomic_json_dump(
+            discovered_catalogs,
+            _data_write_file(f"catalogs-{version_key}.json"),
+        )
     except Exception as e:
         app.logger.warning(f"Could not save catalog file: {e}")
 
