@@ -4,6 +4,7 @@ import {
   Form, FormGroup,
   TextInput,
   Checkbox,
+  Radio,
   Select, SelectOption, SelectVariant,
   FormSelect, FormSelectOption,
   Title,
@@ -15,7 +16,7 @@ import {
 import OperatorSearch from './OperatorSearch';
 import { compareVersions } from '../versionUtils';
 
-function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpChannels, channelReleases, onVersionChange, onChannelChange, isLoadingReleases, isLoadingChannels, isLoadingChannelReleases }) {
+function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpChannels, channelReleases, releaseFilterMode, onReleaseFilterModeChange, onVersionChange, onChannelChange, isLoadingReleases, isLoadingChannels, isLoadingChannelReleases }) {
   // State for operator catalogs
   const [availableCatalogs, setAvailableCatalogs] = useState([]);
   const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
@@ -218,20 +219,39 @@ function BasicConfig({ config, updateConfig, operatorMappings, ocpReleases, ocpC
                 }
                 labelIcon={isLoadingReleases && <Spinner size="sm" />}
               >
-                <FormSelect
-                  value={config.ocp_versions?.[0] || ''}
-                  onChange={handleSingleOcpVersionChange}
-                  id="ocp-version-single"
-                  isDisabled={isLoadingReleases}
-                >
-                  <FormSelectOption
-                    value=""
-                    label={isLoadingReleases ? 'Loading releases...' : 'Select a version...'}
-                  />
-                  {Array.isArray(ocpReleases) ? ocpReleases.slice().reverse().map(version => (
-                    <FormSelectOption key={version} value={version} label={version} />
-                  )) : null}
-                </FormSelect>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <FormSelect
+                    value={config.ocp_versions?.[0] || ''}
+                    onChange={handleSingleOcpVersionChange}
+                    id="ocp-version-single"
+                    isDisabled={isLoadingReleases}
+                    style={{ flex: 1 }}
+                  >
+                    <FormSelectOption
+                      value=""
+                      label={isLoadingReleases ? 'Loading releases...' : 'Select a version...'}
+                    />
+                    {Array.isArray(ocpReleases) ? ocpReleases.slice().reverse().map(version => (
+                      <FormSelectOption key={version} value={version} label={version} />
+                    )) : null}
+                  </FormSelect>
+                  <div style={{ display: 'flex', gap: '0.75rem', whiteSpace: 'nowrap' }}>
+                    <Radio
+                      isChecked={releaseFilterMode === 'only'}
+                      name="release-filter-mode"
+                      onChange={() => { onReleaseFilterModeChange('only'); updateConfig({ ocp_min_version: '', ocp_max_version: '' }); }}
+                      label="Only"
+                      id="release-filter-only"
+                    />
+                    <Radio
+                      isChecked={releaseFilterMode === 'all'}
+                      name="release-filter-mode"
+                      onChange={() => { onReleaseFilterModeChange('all'); updateConfig({ ocp_min_version: '', ocp_max_version: '' }); }}
+                      label="All"
+                      id="release-filter-all"
+                    />
+                  </div>
+                </div>
               </FormGroup>
 
               <FormGroup

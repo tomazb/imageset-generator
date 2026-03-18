@@ -80,7 +80,8 @@ function App() {
   const [operatorMappings, setOperatorMappings] = useState({});
   const [ocpReleases, setOcpReleases] = useState([]);
   const [ocpChannels, setOcpChannels] = useState([]);
-  const [channelReleases, setChannelReleases] = useState([]);
+  const [rawChannelReleases, setRawChannelReleases] = useState([]);
+  const [releaseFilterMode, setReleaseFilterMode] = useState('only');
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState(false);
   const [isLoadingChannelReleases, setIsLoadingChannelReleases] = useState(false);
@@ -109,17 +110,15 @@ function App() {
     try {
       const response = await axios.get(`${API_BASE}/api/releases/${version}/${channel}`);
       if (response.data.status === 'success') {
-        const selectedMinor = config.ocp_versions?.[0] || '';
-        const filtered = filterReleasesByMinorVersion(response.data.releases, selectedMinor);
-        console.log(`Releases for ${channel}: ${response.data.releases.length} total, ${filtered.length} after filtering to ${selectedMinor}.x`);
-        setChannelReleases(filtered);
+        console.log(`Releases for ${channel}: ${response.data.releases.length} total`);
+        setRawChannelReleases(response.data.releases);
       } else {
         console.error('Failed to fetch releases:', response.data.message);
-        setChannelReleases([]);
+        setRawChannelReleases([]);
       }
     } catch (error) {
       console.error('Failed to load releases:', error);
-      setChannelReleases([]);
+      setRawChannelReleases([]);
     } finally {
       setIsLoadingChannelReleases(false);
     }
@@ -232,6 +231,12 @@ function App() {
     loadData();
   }, []);
 
+  // Derive the displayed releases from raw data + filter mode
+  const selectedMinor = config.ocp_versions?.[0] || '';
+  const channelReleases = releaseFilterMode === 'only'
+    ? filterReleasesByMinorVersion(rawChannelReleases, selectedMinor)
+    : rawChannelReleases;
+
   return (
     <Page>
       <PageSection variant={PageSectionVariants.darker}>
@@ -286,6 +291,8 @@ function App() {
               ocpReleases={ocpReleases}
               ocpChannels={ocpChannels}
               channelReleases={channelReleases}
+              releaseFilterMode={releaseFilterMode}
+              onReleaseFilterModeChange={setReleaseFilterMode}
               onVersionChange={fetchChannelsForVersion}
               onChannelChange={fetchReleasesForChannelAndVersion}
               isLoadingReleases={isLoadingReleases}
