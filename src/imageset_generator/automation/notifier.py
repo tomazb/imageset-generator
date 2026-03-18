@@ -13,7 +13,7 @@ import logging
 import os
 import re
 import smtplib
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Dict, Optional
@@ -117,7 +117,7 @@ class NotificationManager:
                 "version": version,
                 "channel": channel,
                 "metadata": metadata,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -147,7 +147,7 @@ class NotificationManager:
                 "version": version,
                 "job_name": job_name,
                 "metadata": metadata,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -185,7 +185,7 @@ class NotificationManager:
                 "job_name": job_name,
                 "duration_seconds": duration,
                 "metadata": metadata,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -211,7 +211,7 @@ class NotificationManager:
             data={
                 "error": error,
                 "context": context,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -328,7 +328,7 @@ class NotificationManager:
             "color": self._get_color_for_event(event_type),
             "text": message,
             "footer": "ImageSet Generator",
-            "ts": int(datetime.utcnow().timestamp()),
+            "ts": int(datetime.now(timezone.utc).timestamp()),
         }
         if sanitized_data:
             attachment["fields"] = [
@@ -384,7 +384,7 @@ class NotificationManager:
             "",
             f"Selected Version: {version}",
             f"Channel: {channel}",
-            f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
         ]
 
@@ -415,7 +415,7 @@ class NotificationManager:
             "",
             f"OCP Version: {version}",
             f"Kubernetes Job: {job_name}",
-            f"Start Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Start Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
         ]
 
@@ -450,7 +450,7 @@ class NotificationManager:
             "",
             f"OCP Version: {version}",
             f"Kubernetes Job: {job_name}",
-            f"Completion Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Completion Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             f"Duration: {hours}h {minutes}m {seconds}s",
             "",
         ]
@@ -477,7 +477,7 @@ class NotificationManager:
             "Automation Failure",
             "=" * 50,
             "",
-            f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
             "Error:",
             f"  {error}",

@@ -10,7 +10,6 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +23,7 @@ from .constants import (
     AUTOMATION_CONFIG_PATH,
     BASE_CATALOGS,
     FRONTEND_BUILD_DIR,
+    OPERATOR_MAPPINGS,
     TIMEOUT_OPM_RENDER,
     TIMEOUT_SKOPEO,
     TLS_VERIFY,
@@ -1128,8 +1128,13 @@ def get_versions():
 
     release_update = refresh_versions()
 
-    if release_update.json.get("status") == "success":
-        releases = release_update.json.get("releases", [])
+    # refresh_versions() returns (response, status_code) on error or response on success
+    if isinstance(release_update, tuple):
+        return release_update
+
+    response_data = release_update.get_json()
+    if response_data.get("status") == "success":
+        releases = response_data.get("releases", [])
         return jsonify(
             {
                 "status": "success",
@@ -1398,30 +1403,8 @@ def get_ocp_channels(version):
 @app.route("/api/operators/mappings", methods=["GET"])
 def get_operator_mappings():
     """Get available operator mappings"""
-    # Extract operator mappings from generator
-    operator_mappings = {
-        "logging": "cluster-logging",
-        "logging-operator": "cluster-logging",
-        "monitoring": "cluster-monitoring-operator",
-        "cluster-monitoring": "cluster-monitoring-operator",
-        "service-mesh": "servicemeshoperator",
-        "istio": "servicemeshoperator",
-        "serverless": "serverless-operator",
-        "knative": "serverless-operator",
-        "pipelines": "openshift-pipelines-operator-rh",
-        "tekton": "openshift-pipelines-operator-rh",
-        "gitops": "openshift-gitops-operator",
-        "argocd": "openshift-gitops-operator",
-        "storage": "odf-operator",
-        "ocs": "odf-operator",
-        "ceph": "odf-operator",
-        "elasticsearch": "elasticsearch-operator",
-        "jaeger": "jaeger-product",
-        "kiali": "kiali-ossm",
-    }
-
     return jsonify(
-        {"mappings": operator_mappings, "suggestions": list(operator_mappings.keys())}
+        {"mappings": OPERATOR_MAPPINGS, "suggestions": list(OPERATOR_MAPPINGS.keys())}
     )
 
 
@@ -2107,13 +2090,11 @@ def generate_download():
             or data.get("ocp_min_version")
             or data.get("ocp_max_version")
         ):
-            # New approach with min/max versions
             channel = data.get("ocp_channel", "stable-4.14")
             min_version = data.get("ocp_min_version")
             max_version = data.get("ocp_max_version")
             graph = data.get("graph", True)
 
-            # Support legacy versions list for backward compatibility
             legacy_versions = None
             if data.get("ocp_versions"):
                 legacy_versions = [v.strip() for v in data["ocp_versions"] if v.strip()]
@@ -2126,74 +2107,29 @@ def generate_download():
                 graph=graph,
             )
 
-        # Add operators
+        # Add operators using shared helpers
         if data.get("operators"):
-            # Group operators by catalog and version, preserving version and channel
             catalog_to_operators = {}
             channels = {}
+
             for op in data["operators"]:
-                if isinstance(op, str):
-                    op_name = op.strip()
-                    op_channel = None
-                    op_catalog = None
-                    op_version = None
-                    op_min_version = None
-                    op_max_version = None
-                elif isinstance(op, dict):
-                    op_name = (
-                        op.get("name", "").strip()
-                        if "name" in op and isinstance(op["name"], str)
-                        else ""
-                    )
-                    op_channel = (
-                        op.get("channel", "").strip()
-                        if "channel" in op and isinstance(op["channel"], str)
-                        else None
-                    )
-                    op_catalog = (
-                        op.get("catalog", "").strip()
-                        if "catalog" in op and isinstance(op["catalog"], str)
-                        else None
-                    )
-                    op_version = (
-                        op.get("version", "").strip()
-                        if "version" in op and isinstance(op["version"], str)
-                        else None
-                    )
-                    op_min_version = (
-                        op.get("minVersion", "").strip()
-                        if "minVersion" in op and isinstance(op["minVersion"], str)
-                        else None
-                    )
-                    op_max_version = (
-                        op.get("maxVersion", "").strip()
-                        if "maxVersion" in op and isinstance(op["maxVersion"], str)
-                        else None
-                    )
-                else:
-                    op_name = ""
-                    op_channel = None
-                    op_catalog = None
-                    op_version = None
-                    op_min_version = None
-                    op_max_version = None
-                if op_name:
-                    op_entry = {"name": op_name}
-                    if op_channel:
-                        op_entry["channel"] = op_channel
-                        channels[op_name] = op_channel
-                    if op_version:
-                        op_entry["version"] = op_version
-                    if op_min_version:
-                        op_entry["minVersion"] = op_min_version
-                    if op_max_version:
-                        op_entry["maxVersion"] = op_max_version
-                    if op_catalog:
-                        catalog_to_operators.setdefault(op_catalog, []).append(op_entry)
-                    else:
-                        catalog_to_operators.setdefault(
-                            "registry.redhat.io/redhat/redhat-operator-index", []
-                        ).append(op_entry)
+                op_data = process_operator_data(op)
+                if not op_data:
+                    continue
+
+                op_entry = prepare_operator_entry(op_data)
+                if not op_entry:
+                    continue
+
+                if op_data["channel"]:
+                    channels[op_data["name"]] = op_data["channel"]
+
+                catalog = (
+                    op_data["catalog"]
+                    or "registry.redhat.io/redhat/redhat-operator-index"
+                )
+                catalog_to_operators.setdefault(catalog, []).append(op_entry)
+
             ocp_version = (
                 data.get("ocp_versions", [None])[0]
                 or data.get("ocp_min_version")
@@ -2238,28 +2174,15 @@ def generate_download():
                 generator.set_archive_size(int(data["archive_size"]))
             except Exception:
                 pass
-        # Generate YAML
+
         yaml_content = generator.generate_yaml()
-        # Create temporary file
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as temp_file:
-            temp_file.write(yaml_content)
-            temp_filename = temp_file.name
-        # Return file content for download
-        response = app.response_class(
+        return app.response_class(
             yaml_content,
             mimetype="application/x-yaml",
             headers={
                 "Content-Disposition": "attachment; filename=imageset-config.yaml"
             },
         )
-        # Clean up temp file
-        try:
-            os.unlink(temp_filename)
-        except Exception:
-            pass
-        return response
 
     except Exception as e:
         app.logger.error(f"Error generating download: {str(e)}")
@@ -2364,11 +2287,12 @@ def refresh_all_static_data():
     """
 
     try:
-
+        # Only call functions that work without per-resource parameters.
+        # refresh_ocp_releases() requires version+channel and
+        # refresh_ocp_operators() requires catalog, so they must be
+        # called individually via their own endpoints.
         refresh_versions()
         refresh_ocp_channels()
-        refresh_ocp_releases()
-        refresh_ocp_operators()
     except Exception as e:
         return (
             jsonify(

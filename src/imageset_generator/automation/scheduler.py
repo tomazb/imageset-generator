@@ -7,7 +7,7 @@ Supports running in the last or second-to-last week of the month.
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -253,7 +253,7 @@ class AutomationScheduler:
             return {
                 "success": False,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
     def _job_executed(self, event):

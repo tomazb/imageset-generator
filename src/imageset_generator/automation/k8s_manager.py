@@ -133,7 +133,7 @@ class KubernetesManager:
             Tuple of (job_name, job_metadata)
         """
         if job_name is None:
-            timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
             name_prefix = self.config.get("job", {}).get("name_prefix")
             if not name_prefix:
                 raise ValueError("Missing required 'job.name_prefix' configuration")
@@ -220,7 +220,7 @@ class KubernetesManager:
                             "status": "completed",
                             "succeeded": True,
                             "duration": elapsed,
-                            "completion_time": datetime.utcnow().isoformat(),
+                            "completion_time": datetime.now(timezone.utc).isoformat(),
                         }
 
                     if condition.type == "Failed" and condition.status == "True":
@@ -234,7 +234,7 @@ class KubernetesManager:
                             "status": "failed",
                             "succeeded": False,
                             "duration": elapsed,
-                            "failure_time": datetime.utcnow().isoformat(),
+                            "failure_time": datetime.now(timezone.utc).isoformat(),
                             "reason": (
                                 condition.reason if condition.reason else "Unknown"
                             ),
@@ -495,7 +495,7 @@ class KubernetesManager:
                 },
                 "annotations": {
                     "imageset.automation/version": version,
-                    "imageset.automation/created-at": datetime.utcnow().isoformat(),
+                    "imageset.automation/created-at": datetime.now(timezone.utc).isoformat(),
                 },
             },
             "spec": {

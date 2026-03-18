@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from .constants import OPERATOR_MAPPINGS
+
 
 class ImageSetGenerator:
     """Generator for OpenShift ImageSetConfiguration files"""
@@ -123,27 +125,6 @@ class ImageSetGenerator:
         """
         if not operators:
             return
-        # Common operator mappings
-        operator_mappings = {
-            "logging": "cluster-logging",
-            "logging-operator": "cluster-logging",
-            "monitoring": "cluster-monitoring-operator",
-            "cluster-monitoring": "cluster-monitoring-operator",
-            "service-mesh": "servicemeshoperator",
-            "istio": "servicemeshoperator",
-            "serverless": "serverless-operator",
-            "knative": "serverless-operator",
-            "pipelines": "openshift-pipelines-operator-rh",
-            "tekton": "openshift-pipelines-operator-rh",
-            "gitops": "openshift-gitops-operator",
-            "argocd": "openshift-gitops-operator",
-            "storage": "odf-operator",
-            "ocs": "odf-operator",
-            "ceph": "odf-operator",
-            "elasticsearch": "elasticsearch-operator",
-            "jaeger": "jaeger-product",
-            "kiali": "kiali-ossm",
-        }
         # Ensure catalog includes OCP version as :v<version> if provided and not already present
         if ocp_version:
             # Remove any existing :vX.YY
@@ -155,7 +136,7 @@ class ImageSetGenerator:
             channel: Optional[str]
             # Accept both string and dict for backward compatibility
             if isinstance(op, str):
-                package_name = operator_mappings.get(op.lower(), op)
+                package_name = OPERATOR_MAPPINGS.get(op.lower(), op)
                 operator_entry = {"name": package_name}
                 if channels and (op in channels or package_name in channels):
                     channel = channels.get(op) or channels.get(package_name)
@@ -164,7 +145,7 @@ class ImageSetGenerator:
                 operator_packages.append(operator_entry)
             elif isinstance(op, dict):
                 op_name_raw: str = op.get("name", "")
-                package_name = operator_mappings.get(op_name_raw.lower(), op_name_raw)
+                package_name = OPERATOR_MAPPINGS.get(op_name_raw.lower(), op_name_raw)
                 operator_entry = {"name": package_name}
 
                 # Handle selected versions if present

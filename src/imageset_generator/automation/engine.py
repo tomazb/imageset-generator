@@ -14,7 +14,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..constants import AUTOMATION_CONFIG_PATH
@@ -66,12 +66,12 @@ class AutomationEngine:
         Returns:
             Execution results and metadata
         """
-        execution_id = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        execution_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         logger.info(f"Starting automation execution: {execution_id}")
 
         result: Dict[str, Any] = {
             "execution_id": execution_id,
-            "start_time": datetime.utcnow().isoformat(),
+            "start_time": datetime.now(timezone.utc).isoformat(),
             "success": False,
             "steps": {},
         }
@@ -225,7 +225,7 @@ class AutomationEngine:
             )
 
         finally:
-            result["end_time"] = datetime.utcnow().isoformat()
+            result["end_time"] = datetime.now(timezone.utc).isoformat()
             self._save_to_history(result)
 
         return result
@@ -314,7 +314,7 @@ class AutomationEngine:
                 "ocp_major_minor": ocp_version,
                 "available_releases": releases,
                 "selection_strategy": strategy,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -480,7 +480,7 @@ class AutomationEngine:
                 "last_processed_version": version,
                 "last_job_name": job_name,
                 "last_status": status,
-                "last_execution_time": datetime.utcnow().isoformat(),
+                "last_execution_time": datetime.now(timezone.utc).isoformat(),
             }
         )
         self._save_state(self.state)

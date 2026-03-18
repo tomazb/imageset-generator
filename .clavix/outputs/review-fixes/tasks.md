@@ -49,3 +49,23 @@ date: 2026-03-17
 - [x] **R5** [P2]: Pass graph flag in download generation endpoint
   > **File**: `src/imageset_generator/app.py` ~line 2118
   > **Details**: Identical fix to R4 in the download handler. Read `graph = data.get("graph", True)`, add `graph=graph` kwarg to `add_ocp_versions()`.
+
+## Phase 6: Code Review Important Fixes (2026-03-17)
+
+- [x] **I2**: Deduplicate operator mappings dict — import OPERATOR_MAPPINGS from constants.py in generator.py and app.py instead of maintaining three copies
+  Task ID: phase-6-i2
+
+- [x] **I3**: Fix refresh_all_static_data calling refresh functions with no required args — rework to actually refresh all data
+  Task ID: phase-6-i3
+
+- [x] **I6**: Fix get_versions accessing .json on a response tuple — extract data logic from Flask response handling
+  Task ID: phase-6-i6
+
+- [x] **I1**: Migrate deprecated datetime.utcnow() to datetime.now(timezone.utc) in all automation/ modules
+  Task ID: phase-6-i1
+
+- [x] **I4**: Deduplicate generate_download by reusing shared helpers from generate_preview
+  Task ID: phase-6-i4
+
+- [x] **I5**: Remove dead NamedTemporaryFile code in generate_download
+  Task ID: phase-6-i5
