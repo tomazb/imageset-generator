@@ -62,13 +62,14 @@ def test_api(base_url="http://localhost:5000"):
         data = response.json()
         assert "yaml" in data
 
-        # Test sample config
-        print("\n4. Testing sample config...")
-        response = requests.get(f"{base_url}/api/config/sample")
+        # Test seeded OCP versions
+        print("\n4. Testing seeded OCP versions...")
+        response = requests.get(f"{base_url}/api/ocp-versions")
         if response.status_code != 200:
-            pytest.fail(f"Sample config failed: {response.status_code}")
+            pytest.fail(f"OCP versions failed: {response.status_code}")
         data = response.json()
-        assert "config" in data
+        assert data.get("status") == "success"
+        assert isinstance(data.get("releases"), list)
 
         # Test validation
         print("\n5. Testing configuration validation...")

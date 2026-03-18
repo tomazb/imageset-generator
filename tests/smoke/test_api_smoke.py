@@ -1,6 +1,18 @@
 from imageset_generator.app import app
 
 
+def test_ocp_versions_endpoint_returns_seeded_versions():
+    app.testing = True
+    client = app.test_client()
+
+    response = client.get("/api/ocp-versions")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert isinstance(data["releases"], list)
+
+
 def test_generate_preview_endpoint_returns_yaml():
     app.testing = True
     client = app.test_client()
