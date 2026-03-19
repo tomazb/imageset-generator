@@ -10,6 +10,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -486,9 +487,18 @@ def _render_catalog_index(catalog, output_path):
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
         return  # File already exists and is not empty
 
-    with open(output_path, "w") as f:
-        cmd = build_opm_command(catalog, output_format="json")
-        subprocess.run(cmd, stdout=f, check=True, timeout=TIMEOUT_OPM_RENDER)
+    cmd = build_opm_command(catalog, output_format="json")
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(output_path), suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            subprocess.run(cmd, stdout=f, check=True, timeout=TIMEOUT_OPM_RENDER)
+        os.replace(tmp_path, output_path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _extract_operator_data(index_path, output_path):
