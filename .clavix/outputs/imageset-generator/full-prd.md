@@ -64,7 +64,7 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 - Cached catalog data with manual refresh capability (via `opm render`); catalog discovery uses `opm render`
 
 #### 1.3 Web User Interface
-- **Status**: Implemented
+- **Status**: Partially implemented (smart version filtering not yet implemented)
 - React + PatternFly UI (consistent with OpenShift console look & feel)
 - Tabbed interface: Basic Config, Advanced Config, Preview & Generate, Load/Save
 - Real-time YAML preview with syntax highlighting as user configures
@@ -72,6 +72,10 @@ Full multi-registry support, policy-driven mirroring, and autonomous release tra
 - Copy-to-clipboard and file download for generated YAML
 - Load/save configuration files (drag-and-drop upload)
 - Toast notifications and loading states for async operations
+- Smart release version filtering in the release selection flow:
+  - When a minor OCP version is selected (e.g., 4.20), the release list for the chosen channel shows only matching minor version releases (e.g., only 4.20.x from `stable-4.20`), filtering out lower minor versions that exist in the channel
+  - Minimum version selection constrains the maximum version field: maximum cannot be set lower than the chosen minimum
+  - Version dropdowns update reactively as selections change
 
 #### 1.4 CLI Interface
 - **Status**: Implemented
@@ -371,6 +375,14 @@ The `automation/` module contains scaffolding for the full automation pipeline b
 ---
 
 ## Refinement History
+
+### 2026-03-18 — Smart release version filtering in UI
+
+**Changes:**
+- [MODIFIED] 1.3: Status changed from "Implemented" to "Partially implemented" (smart version filtering not yet built)
+- [ADDED] 1.3: Smart release version filtering — channel release list filtered by selected minor version (e.g., selecting 4.20 shows only 4.20.x from `stable-4.20`), minimum version constrains maximum version field, reactive dropdown updates
+
+**Why:** When selecting a channel like `stable-4.20`, the release list currently shows all versions in the channel (including 4.18.x, 4.19.x). Platform engineers expect the list to match the selected minor version. Additionally, selecting a minimum version should prevent choosing a lower maximum version.
 
 ### 2026-03-17 — Full oc-mirror v2 support
 
