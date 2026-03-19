@@ -1073,14 +1073,15 @@ def refresh_catalogs_for_version(version=None):
             500,
         )
 
-    # Write Catalog info to File (use version_key = major.minor for consistent filenames)
-    try:
-        atomic_json_dump(
-            discovered_catalogs,
-            _data_write_file(f"catalogs-{version_key}.json"),
-        )
-    except Exception as e:
-        app.logger.warning(f"Could not save catalog file: {e}")
+    # Write one catalog file per version (version_key = major.minor for consistent filenames)
+    for vk, vk_catalogs in discovered_catalogs.items():
+        try:
+            atomic_json_dump(
+                vk_catalogs,
+                _data_write_file(f"catalogs-{vk}.json"),
+            )
+        except Exception as e:
+            app.logger.warning(f"Could not save catalog file for {vk}: {e}")
 
     return jsonify(
         {
