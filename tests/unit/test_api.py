@@ -3,16 +3,11 @@
 Test script for the OpenShift ImageSetConfiguration Generator Web API
 """
 
-try:
-    import requests
-except ImportError:
-    print("Error: requests library not found.")
-    print("Install with: pip install requests")
-    exit(1)
-
 import sys
 
 import pytest
+
+requests = pytest.importorskip("requests", reason="requests library required for API tests")
 
 
 def test_api(base_url="http://localhost:5000"):
