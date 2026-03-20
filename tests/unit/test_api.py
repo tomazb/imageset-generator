@@ -7,7 +7,9 @@ import sys
 
 import pytest
 
-requests = pytest.importorskip("requests", reason="requests library required for API tests")
+requests = pytest.importorskip(
+    "requests", reason="requests library required for API tests"
+)
 
 
 def test_api(base_url="http://localhost:5000"):

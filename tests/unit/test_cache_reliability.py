@@ -2,10 +2,7 @@
 """Tests for cache reliability: TTL, completeness validation, and atomic writes."""
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +13,6 @@ from imageset_generator.constants import (
     atomic_json_dump,
     get_data_read_path,
 )
-
 
 # ---------------------------------------------------------------------------
 # TTL / freshness tests
@@ -137,12 +133,8 @@ def test_stale_cache_falls_through_to_seed(tmp_path, monkeypatch):
         json.dumps({"releases": [f"4.{v}" for v in range(14, 23)]})
     )
 
-    monkeypatch.setattr(
-        "imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir
-    )
-    monkeypatch.setattr(
-        "imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir
-    )
+    monkeypatch.setattr("imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir)
+    monkeypatch.setattr("imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir)
 
     result = get_data_read_path("ocp-versions.json")
     assert result == packaged_file
@@ -171,12 +163,8 @@ def test_partial_cache_falls_through_to_seed(tmp_path, monkeypatch):
         json.dumps({"releases": [f"4.{v}" for v in range(14, 23)]})
     )
 
-    monkeypatch.setattr(
-        "imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir
-    )
-    monkeypatch.setattr(
-        "imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir
-    )
+    monkeypatch.setattr("imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir)
+    monkeypatch.setattr("imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir)
 
     result = get_data_read_path("ocp-versions.json")
     assert result == packaged_file
@@ -202,12 +190,8 @@ def test_fresh_complete_cache_takes_priority(tmp_path, monkeypatch):
     packaged_file = packaged_dir / "ocp-versions.json"
     packaged_file.write_text(json.dumps({"releases": ["4.14", "4.15", "4.16"]}))
 
-    monkeypatch.setattr(
-        "imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir
-    )
-    monkeypatch.setattr(
-        "imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir
-    )
+    monkeypatch.setattr("imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir)
+    monkeypatch.setattr("imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir)
 
     result = get_data_read_path("ocp-versions.json")
     assert result == runtime_file
@@ -223,12 +207,8 @@ def test_no_runtime_cache_uses_seed(tmp_path, monkeypatch):
     packaged_file = packaged_dir / "ocp-versions.json"
     packaged_file.write_text(json.dumps({"releases": ["4.14", "4.15"]}))
 
-    monkeypatch.setattr(
-        "imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir
-    )
-    monkeypatch.setattr(
-        "imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir
-    )
+    monkeypatch.setattr("imageset_generator.constants.RUNTIME_DATA_DIR", runtime_dir)
+    monkeypatch.setattr("imageset_generator.constants.PACKAGED_DATA_DIR", packaged_dir)
 
     result = get_data_read_path("ocp-versions.json")
     assert result == packaged_file

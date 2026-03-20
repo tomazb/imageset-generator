@@ -1,7 +1,8 @@
 """Unit tests for the Cincinnati API discovery module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 import imageset_generator.discovery as discovery_mod
 from imageset_generator.discovery import (

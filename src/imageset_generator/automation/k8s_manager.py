@@ -445,9 +445,7 @@ class KubernetesManager:
         storage_mount_path = storage_config.get("mount_path", "/mirror")
         # Validate storage mount path against strict pattern to prevent injection
         if not re.match(r"^/[a-zA-Z0-9/_-]+$", storage_mount_path):
-            raise ValueError(
-                f"Invalid storage mount path: must match /[a-zA-Z0-9/_-]+"
-            )
+            raise ValueError("Invalid storage mount path: must match /[a-zA-Z0-9/_-]+")
         volume_mounts.append(
             {"name": "mirror-storage", "mountPath": storage_mount_path}
         )
@@ -495,7 +493,9 @@ class KubernetesManager:
                 },
                 "annotations": {
                     "imageset.automation/version": version,
-                    "imageset.automation/created-at": datetime.now(timezone.utc).isoformat(),
+                    "imageset.automation/created-at": datetime.now(
+                        timezone.utc
+                    ).isoformat(),
                 },
             },
             "spec": {

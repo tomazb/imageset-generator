@@ -1053,7 +1053,10 @@ def refresh_catalogs_for_version(version=None):
                     jsonify(
                         {
                             "status": "error",
-                            "message": f"Failed to generate catalogs for version {version_key}. Check server logs for details.",
+                            "message": (
+                                f"Failed to generate catalogs for version {version_key}."
+                                " Check server logs for details."
+                            ),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     ),
@@ -1275,7 +1278,10 @@ def get_ocp_releases(version, channel):
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Failed to get OCP releases for version {version} and channel {channel}. Check server logs for details.",
+                    "message": (
+                        f"Failed to get OCP releases for version {version} and channel {channel}."
+                        " Check server logs for details."
+                    ),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ),
@@ -2068,7 +2074,10 @@ def generate_preview():
         app.logger.error(traceback.format_exc())
         return (
             jsonify(
-                {"error": "Failed to generate preview. Check server logs for details.", "success": False}
+                {
+                    "error": "Failed to generate preview. Check server logs for details.",
+                    "success": False,
+                }
             ),
             500,
         )
@@ -2191,7 +2200,10 @@ def generate_download():
         app.logger.error(traceback.format_exc())
         return (
             jsonify(
-                {"error": "Failed to generate download. Check server logs for details.", "success": False}
+                {
+                    "error": "Failed to generate download. Check server logs for details.",
+                    "success": False,
+                }
             ),
             500,
         )
@@ -2296,6 +2308,7 @@ def refresh_all_static_data():
         refresh_versions()
         refresh_ocp_channels()
     except Exception as e:
+        app.logger.exception(f"Error refreshing static data: {e}")
         return (
             jsonify(
                 {
@@ -2367,7 +2380,7 @@ def get_ocp_versions_static():
                 ),
                 404,
             )
-    except Exception as e:
+    except Exception:
         return (
             jsonify(
                 {

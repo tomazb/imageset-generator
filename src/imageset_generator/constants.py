@@ -99,6 +99,8 @@ def _cache_file_is_fresh(path: Path) -> bool:
         if not ts_str:
             return False
         ts = datetime.fromisoformat(ts_str)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
         age = (datetime.now(timezone.utc) - ts).total_seconds()
         return age < CACHE_FILE_MAX_AGE_SECONDS
     except Exception:
@@ -256,12 +258,7 @@ OPERATOR_MAPPINGS = {
 
 # File Paths
 DATA_DIR = "data"
-FRONTEND_BUILD_DIR = str(
-    _prefer_existing(
-        PROJECT_ROOT / "frontend" / "build",
-        PACKAGED_FRONTEND_BUILD_DIR,
-    )
-)
+FRONTEND_BUILD_DIR = str(PACKAGED_FRONTEND_BUILD_DIR)
 
 # Cache File Names
 CACHE_OCP_VERSIONS = "ocp-versions.json"
