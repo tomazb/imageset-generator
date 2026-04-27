@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from .constants import OPERATOR_MAPPINGS
+from .constants import DEFAULT_OCP_CHANNEL, DEFAULT_OPERATOR_CATALOG, OPERATOR_MAPPINGS
 
 
 class ImageSetGenerator:
@@ -56,7 +56,7 @@ class ImageSetGenerator:
     def add_ocp_versions(
         self,
         versions: Optional[List[str]] = None,
-        channel: str = "stable-4.14",
+        channel: str = DEFAULT_OCP_CHANNEL,
         min_version: Optional[str] = None,
         max_version: Optional[str] = None,
         graph: bool = True,
@@ -66,7 +66,7 @@ class ImageSetGenerator:
 
         Args:
             versions: List of OCP version strings (e.g., ["4.14.1", "4.14.2"]) - legacy support
-            channel: OCP channel name (default: "stable-4.14")
+            channel: OCP channel name (default: DEFAULT_OCP_CHANNEL)
             min_version: Minimum version to mirror
             max_version: Maximum version to mirror (optional)
             graph: Whether to include version graph data (default: True)
@@ -85,7 +85,7 @@ class ImageSetGenerator:
         elif versions:
             # Legacy approach - use the versions list
             # Determine channel from versions if not specified
-            if channel == "stable-4.14" and versions:
+            if channel == DEFAULT_OCP_CHANNEL and versions:
                 major_minor = ".".join(versions[0].split(".")[:2])
                 channel = f"stable-{major_minor}"
 
@@ -103,7 +103,7 @@ class ImageSetGenerator:
     def add_operators(
         self,
         operators: List[Any],
-        catalog: str = "registry.redhat.io/redhat/redhat-operator-index",
+        catalog: str = DEFAULT_OPERATOR_CATALOG,
         channels: Optional[Dict[str, str]] = None,
         ocp_version: Optional[str] = None,
         newest_channel: Optional[Dict[str, str]] = None,
@@ -285,8 +285,8 @@ Examples:
     parser.add_argument(
         "--ocp-channel",
         type=str,
-        default="stable-4.14",
-        help="OCP channel name (default: stable-4.14)",
+        default=DEFAULT_OCP_CHANNEL,
+        help=f"OCP channel name (default: {DEFAULT_OCP_CHANNEL})",
     )
 
     parser.add_argument(
@@ -298,7 +298,7 @@ Examples:
     parser.add_argument(
         "--operator-catalog",
         type=str,
-        default="registry.redhat.io/redhat/redhat-operator-index",
+        default=DEFAULT_OPERATOR_CATALOG,
         help="Operator catalog source",
     )
 

@@ -55,6 +55,11 @@ function deepSanitizeConfig(obj) {
 }
 
 const API_BASE = '';
+const DEFAULT_OCP_CHANNEL = 'stable-4.14';
+
+function getApiErrorMessage(error) {
+  return error.response?.data?.message || error.response?.data?.error || error.message;
+}
 
 function App() {
   console.log('App component is initializing...');
@@ -62,7 +67,7 @@ function App() {
   const [activeTab, setActiveTab] = useState(0);
   const [config, setConfig] = useState({
     ocp_versions: [],
-    ocp_channel: 'stable-4.14',
+    ocp_channel: DEFAULT_OCP_CHANNEL,
     ocp_min_version: '',
     ocp_max_version: '',
     operators: [],
@@ -154,7 +159,7 @@ function App() {
       setAlertVariant('success');
     } catch (error) {
       console.error('Failed to generate preview:', error);
-      const errorMsg = 'Error generating preview: ' + (error.response?.data?.error || error.message);
+      const errorMsg = 'Error generating preview: ' + getApiErrorMessage(error);
       setStatus(errorMsg);
       setAlertMessage(errorMsg);
       setAlertVariant('danger');
@@ -188,7 +193,7 @@ function App() {
       setAlertVariant('success');
     } catch (error) {
       console.error('Failed to download config:', error);
-      const errorMsg = 'Error downloading configuration: ' + (error.response?.data?.error || error.message);
+      const errorMsg = 'Error downloading configuration: ' + getApiErrorMessage(error);
       setStatus(errorMsg);
       setAlertMessage(errorMsg);
       setAlertVariant('danger');
@@ -202,7 +207,7 @@ function App() {
       const resp = await axios.post('/api/refresh/all');
       setRefreshStatus(resp.data.message || 'Refresh complete!');
     } catch (err) {
-      setRefreshStatus('Refresh failed: ' + (err.response?.data?.error || err.message));
+      setRefreshStatus('Refresh failed: ' + getApiErrorMessage(err));
     }
     setIsRefreshing(false);
   };

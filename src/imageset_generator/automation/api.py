@@ -6,12 +6,14 @@ Provides REST API endpoints for managing and monitoring automation.
 
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 
 from ..constants import AUTOMATION_CONFIG_PATH
 from .engine import load_config
+from .sanitization import redact_sensitive
 from .scheduler import AutomationScheduler
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,22 @@ automation_bp = Blueprint("automation", __name__, url_prefix="/api/automation")
 # Global scheduler instance (initialized by app)
 _scheduler = None
 _config = None
+
+
+def automation_error(message: str, status_code: int):
+    """Return a standard automation error response with legacy fields."""
+    return (
+        jsonify(
+            {
+                "status": "error",
+                "message": message,
+                "error": message,
+                "success": False,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ),
+        status_code,
+    )
 
 
 def init_automation(config_path: str = str(AUTOMATION_CONFIG_PATH)):
@@ -89,10 +107,7 @@ def get_status():
 
     except Exception as e:
         logger.exception(f"Error getting automation status: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/trigger", methods=["POST"])
@@ -100,7 +115,7 @@ def trigger_automation():
     """Manually trigger automation execution"""
     try:
         if _scheduler is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         logger.info("Manual automation trigger requested")
 
@@ -116,10 +131,7 @@ def trigger_automation():
 
     except Exception as e:
         logger.exception(f"Error triggering automation: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/config", methods=["GET"])
@@ -127,7 +139,7 @@ def get_config():
     """Get automation configuration (sanitized)"""
     try:
         if _config is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         # Create sanitized config (remove sensitive data)
         sanitized = sanitize_config(_config)
@@ -136,10 +148,7 @@ def get_config():
 
     except Exception as e:
         logger.exception(f"Error getting automation config: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/config", methods=["PUT"])
@@ -147,12 +156,12 @@ def update_config():
     """Update automation configuration"""
     try:
         if _config is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         new_config = request.get_json()
 
         if not new_config:
-            return jsonify({"error": "No configuration provided"}), 400
+            return automation_error("No configuration provided", 400)
 
         # Validate and update config
         # In production, this should save to file and restart scheduler
@@ -168,10 +177,7 @@ def update_config():
 
     except Exception as e:
         logger.exception(f"Error updating automation config: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/history", methods=["GET"])
@@ -179,7 +185,7 @@ def get_history():
     """Get execution history"""
     try:
         if _scheduler is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         # Get query parameters
         limit = min(request.args.get("limit", default=50, type=int), 1000)
@@ -204,10 +210,7 @@ def get_history():
 
     except Exception as e:
         logger.exception(f"Error getting automation history: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/history/<execution_id>", methods=["GET"])
@@ -215,7 +218,7 @@ def get_execution(execution_id: str):
     """Get specific execution details"""
     try:
         if _scheduler is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         history = _scheduler.engine.history
 
@@ -225,16 +228,13 @@ def get_execution(execution_id: str):
         )
 
         if not execution:
-            return jsonify({"error": "Execution not found"}), 404
+            return automation_error("Execution not found", 404)
 
         return jsonify(execution), 200
 
     except Exception as e:
         logger.exception(f"Error getting execution: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/jobs", methods=["GET"])
@@ -242,11 +242,11 @@ def get_jobs():
     """Get Kubernetes jobs status"""
     try:
         if _scheduler is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         k8s_manager = _scheduler.engine.k8s_manager
         if not k8s_manager:
-            return jsonify({"error": "Kubernetes manager not available"}), 400
+            return automation_error("Kubernetes manager not available", 400)
 
         # List jobs
         jobs = k8s_manager.batch_v1.list_namespaced_job(
@@ -274,10 +274,7 @@ def get_jobs():
 
     except Exception as e:
         logger.exception(f"Error getting jobs: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/jobs/<job_name>", methods=["GET"])
@@ -285,11 +282,11 @@ def get_job(job_name: str):
     """Get specific job status"""
     try:
         if _scheduler is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         k8s_manager = _scheduler.engine.k8s_manager
         if not k8s_manager:
-            return jsonify({"error": "Kubernetes manager not available"}), 400
+            return automation_error("Kubernetes manager not available", 400)
 
         # Get job
         job = k8s_manager.batch_v1.read_namespaced_job_status(
@@ -329,12 +326,9 @@ def get_job(job_name: str):
 
     except Exception as e:
         if hasattr(e, "status") and e.status == 404:
-            return jsonify({"error": "Job not found"}), 404
+            return automation_error("Job not found", 404)
         logger.exception(f"Error getting job: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 @automation_bp.route("/jobs/<job_name>/logs", methods=["GET"])
@@ -342,11 +336,11 @@ def get_job_logs(job_name: str):
     """Get job logs"""
     try:
         if _scheduler is None:
-            return jsonify({"error": "Automation is not initialized"}), 400
+            return automation_error("Automation is not initialized", 400)
 
         k8s_manager = _scheduler.engine.k8s_manager
         if not k8s_manager:
-            return jsonify({"error": "Kubernetes manager not available"}), 400
+            return automation_error("Kubernetes manager not available", 400)
 
         tail_lines = min(request.args.get("tail", default=100, type=int), 10000)
 
@@ -359,10 +353,7 @@ def get_job_logs(job_name: str):
 
     except Exception as e:
         logger.exception(f"Error getting job logs: {e}")
-        return (
-            jsonify({"error": "Internal server error. Check server logs for details."}),
-            500,
-        )
+        return automation_error("Internal server error. Check server logs for details.", 500)
 
 
 def sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -375,29 +366,4 @@ def sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Sanitized configuration
     """
-    import copy
-
-    sanitized = copy.deepcopy(config)
-
-    # Remove sensitive notification settings
-    if "notifications" in sanitized:
-        if "email" in sanitized["notifications"]:
-            email = sanitized["notifications"]["email"]
-            if "smtp_password" in email:
-                email["smtp_password"] = "***"
-
-        if "slack" in sanitized["notifications"]:
-            slack = sanitized["notifications"]["slack"]
-            if "webhook_url" in slack:
-                slack["webhook_url"] = "***"
-
-        if "webhook" in sanitized["notifications"]:
-            webhook = sanitized["notifications"]["webhook"]
-            if "url" in webhook:
-                webhook["url"] = "***"
-            if "headers" in webhook and isinstance(webhook["headers"], dict):
-                for key in webhook["headers"]:
-                    if "auth" in key.lower() or "token" in key.lower():
-                        webhook["headers"][key] = "***"
-
-    return sanitized
+    return redact_sensitive(config, redacted_value="***")

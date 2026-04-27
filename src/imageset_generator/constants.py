@@ -188,6 +188,8 @@ TIMEOUT_OPM_RENDER = 180  # For opm render commands
 TIMEOUT_CATALOG_DISCOVERY = 300  # For catalog discovery
 TIMEOUT_CINCINNATI = 15  # For Cincinnati API requests
 TIMEOUT_SKOPEO = 30  # For skopeo inspect commands
+TIMEOUT_JQ = 60  # For jq filter commands
+TIMEOUT_NOTIFICATION_REQUEST = 10  # For outbound notification webhooks
 
 # Cincinnati API Configuration
 CINCINNATI_API_URL = "https://api.openshift.com/api/upgrades_info/v1/graph"
@@ -197,6 +199,7 @@ OCP_MINOR_PROBE_RANGE = range(12, 30)
 # Server Configuration
 DEFAULT_PORT = 5000
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "False").lower() == "true"
+MAX_CONTENT_LENGTH_BYTES = 16 * 1024 * 1024
 
 # Version Patterns
 VERSION_PATTERN = r"^\d+\.\d+$"  # X.Y format
@@ -205,6 +208,9 @@ CHANNEL_PATTERN = r"^[a-zA-Z][a-zA-Z0-9\-]*\d+\.\d+$"  # stable-X.Y format
 # Catalog Configuration
 CATALOG_REGISTRY = "registry.redhat.io"
 CATALOG_ORG = "redhat"
+DEFAULT_OCP_VERSION = "4.18"
+DEFAULT_OCP_CHANNEL = "stable-4.14"
+DEFAULT_OPERATOR_CATALOG = f"{CATALOG_REGISTRY}/{CATALOG_ORG}/redhat-operator-index"
 
 # Base Catalogs
 BASE_CATALOGS = [

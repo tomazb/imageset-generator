@@ -18,13 +18,18 @@ from pathlib import Path
 import yaml
 from flask import Flask, abort, jsonify, request, send_from_directory
 from flask_cors import CORS
-from packaging.version import Version as Version_Checker
+from packaging.version import Version as VersionChecker
 
 from .constants import (
     AUTOMATION_CONFIG_PATH,
     BASE_CATALOGS,
+    DEFAULT_OCP_CHANNEL,
+    DEFAULT_OCP_VERSION,
+    DEFAULT_OPERATOR_CATALOG,
     FRONTEND_BUILD_DIR,
+    MAX_CONTENT_LENGTH_BYTES,
     OPERATOR_MAPPINGS,
+    TIMEOUT_JQ,
     TIMEOUT_OPM_RENDER,
     TIMEOUT_SKOPEO,
     TLS_VERIFY,
@@ -41,6 +46,7 @@ from .exceptions import CatalogError, CatalogRenderError
 from .generator import ImageSetGenerator
 from .validation import (
     ValidationError,
+    normalize_ocp_minor_version,
     validate_catalog_url,
     validate_channel,
     validate_version,
@@ -183,7 +189,7 @@ def prepare_operator_entry(op_data):
 
 
 app = Flask(__name__, static_folder=FRONTEND_BUILD_DIR)
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB request size limit
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH_BYTES
 CORS(app)  # Enable CORS for all routes
 
 # Initialize automation (optional - only if config exists)
@@ -225,16 +231,31 @@ def _frontend_build_exists():
 
 def _not_found_response():
     """Return a consistent JSON 404 payload."""
-    return (
-        jsonify(
-            {
-                "status": "error",
-                "message": "Resource not found",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        ),
-        404,
-    )
+    return api_error("Resource not found", 404)
+
+
+def utc_timestamp():
+    """Return an ISO-8601 UTC timestamp for API payloads."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def api_success(payload=None, status_code=200, include_legacy_success=False):
+    """Return a standard success JSON response."""
+    body = {"status": "success", "timestamp": utc_timestamp()}
+    if payload:
+        body.update(payload)
+    if include_legacy_success:
+        body["success"] = True
+    return jsonify(body), status_code
+
+
+def api_error(message, status_code=400, include_legacy_error=False):
+    """Return a standard error JSON response."""
+    body = {"status": "error", "message": message, "timestamp": utc_timestamp()}
+    if include_legacy_error:
+        body["error"] = message
+        body["success"] = False
+    return jsonify(body), status_code
 
 
 def _data_read_file(filename: str) -> Path:
@@ -261,6 +282,186 @@ def _arch_scoped_filename(base_filename: str, arch: str) -> str:
     if not dot:
         return f"{base_filename}-{arch}"
     return f"{stem}-{arch}.{ext}"
+
+
+def _version_in_range(version, min_version, max_version):
+    """Return True when an operator version falls within a requested range."""
+    candidates = [
+        (version, min_version, max_version),
+        (version.split("-")[0], min_version.split("-")[0], max_version.split("-")[0]),
+        (version.split("+")[0], min_version.split("+")[0], max_version.split("+")[0]),
+    ]
+    for candidate_version, candidate_min, candidate_max in candidates:
+        try:
+            return VersionChecker(candidate_min) <= VersionChecker(
+                candidate_version
+            ) <= VersionChecker(candidate_max)
+        except Exception as e:
+            app.logger.warning(
+                "Version comparison error for %s in range %s-%s: %s",
+                version,
+                min_version,
+                max_version,
+                e,
+            )
+    return False
+
+
+def _operator_channels_for_range(name, catalog_name, ocp_version, min_version, max_version):
+    """Load cached operator metadata and derive channels for a version range."""
+    if not (name and catalog_name and ocp_version and min_version and max_version):
+        return set(), {}
+
+    version_key = normalize_ocp_minor_version(ocp_version)
+    catalog_index = (catalog_name.split("/")[-1]).split(":")[0]
+    static_file_path = _data_read_file(f"operators-{catalog_index}-{version_key}.json")
+    channel_version_map = {}
+    possible_versions = []
+
+    try:
+        with open(static_file_path, "r") as f:
+            operator_catalog_data = json.load(f)
+    except FileNotFoundError:
+        app.logger.warning("Static operator data not found: %s", static_file_path)
+        return set(), {}
+    except Exception as e:
+        app.logger.warning("Could not load operator data from %s: %s", static_file_path, e)
+        return set(), {}
+
+    for operator in operator_catalog_data.get("operators", []):
+        if operator.get("name") == name:
+            version = operator.get("version")
+            if version:
+                possible_versions.append(version)
+                channel_version_map[version] = operator.get("channel")
+
+    channel_list = set()
+    newest_channel = {}
+    for version in possible_versions:
+        if not _version_in_range(version, min_version, max_version):
+            continue
+        channel = channel_version_map.get(version)
+        if channel:
+            channel_list.add(channel)
+        if version == max_version and channel:
+            newest_channel[name] = channel
+
+    return channel_list, newest_channel
+
+
+def _additional_image_names(raw_images):
+    """Normalize additional image entries from UI payloads."""
+    images = []
+    for img in raw_images or []:
+        if isinstance(img, str):
+            img_val = img.strip()
+        elif isinstance(img, dict):
+            img_val = (
+                img.get("name", "").strip()
+                if "name" in img and isinstance(img["name"], str)
+                else ""
+            )
+        else:
+            img_val = ""
+        if img_val:
+            images.append(img_val)
+    return images
+
+
+def _build_imageset_generator(data):
+    """Build an ImageSetGenerator from an API request payload."""
+    generator = ImageSetGenerator()
+
+    if (
+        data.get("ocp_versions")
+        or data.get("ocp_min_version")
+        or data.get("ocp_max_version")
+    ):
+        channel = data.get("ocp_channel", DEFAULT_OCP_CHANNEL)
+        min_version = data.get("ocp_min_version")
+        max_version = data.get("ocp_max_version")
+        graph = data.get("graph", True)
+        legacy_versions = None
+        if data.get("ocp_versions"):
+            legacy_versions = [v.strip() for v in data["ocp_versions"] if v.strip()]
+
+        generator.add_ocp_versions(
+            versions=legacy_versions,
+            channel=channel,
+            min_version=min_version,
+            max_version=max_version,
+            graph=graph,
+        )
+
+    if data.get("operators"):
+        catalog_to_operators = {}
+        channels = {}
+        newest_channel = {}
+        ocp_version = (
+            data.get("ocp_versions", [None])[0]
+            or data.get("ocp_min_version")
+            or data.get("ocp_max_version")
+        )
+
+        for op in data["operators"]:
+            op_data = process_operator_data(op)
+            if not op_data:
+                continue
+
+            op_entry = prepare_operator_entry(op_data)
+            if not op_entry:
+                continue
+
+            catalog = op_data["catalog"] or data.get("operator_catalog") or DEFAULT_OPERATOR_CATALOG
+            try:
+                validate_catalog_url(catalog)
+            except ValidationError as e:
+                raise ValidationError(f"Invalid catalog URL: {catalog}") from e
+
+            name = op_data.get("name")
+            min_version = op_data.get("minVersion")
+            max_version = op_data.get("maxVersion")
+            range_channels, range_newest = _operator_channels_for_range(
+                name,
+                catalog,
+                ocp_version,
+                min_version,
+                max_version,
+            )
+            if range_channels:
+                channels[name] = range_channels
+            elif op_data["channel"]:
+                channels[name] = op_data["channel"]
+            newest_channel.update(range_newest)
+
+            catalog_to_operators.setdefault(catalog, []).append(op_entry)
+
+        for catalog, ops in catalog_to_operators.items():
+            generator.add_operators(
+                ops,
+                catalog,
+                channels,
+                ocp_version=ocp_version,
+                newest_channel=newest_channel,
+            )
+
+    images = _additional_image_names(data.get("additional_images"))
+    if images:
+        generator.add_additional_images(images)
+
+    if data.get("helm_charts"):
+        generator.add_helm_charts(data["helm_charts"])
+
+    if data.get("kubevirt_container", False):
+        generator.set_kubevirt_container(True)
+
+    if data.get("archive_size"):
+        try:
+            generator.set_archive_size(int(data["archive_size"]))
+        except Exception:
+            pass
+
+    return generator
 
 
 def get_operators_from_opm(catalog_url, version_key):
@@ -301,18 +502,6 @@ def get_operators_from_opm(catalog_url, version_key):
             version=version_key,
             original_error=e,
         )
-
-
-def get_cached_operators(cache_file):
-    """Get operators from cache file if it exists and is not expired"""
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, "r") as f:
-                data = json.load(f)
-                return data.get("operators", [])
-        except Exception:
-            pass
-    return None
 
 
 def load_operators_from_file(catalog_key, version_key):
@@ -383,7 +572,7 @@ def health_check():
     return jsonify(
         {
             "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
             "version": "1.0.0",
         }
     )
@@ -411,7 +600,7 @@ def refresh_versions():
                     {
                         "status": "error",
                         "message": "Failed to refresh releases: no versions returned from Cincinnati API",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 ),
                 500,
@@ -424,7 +613,7 @@ def refresh_versions():
                 "releases": releases,
                 "count": len(releases),
                 "source": "cincinnati",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             },
             static_file_path,
         )
@@ -436,7 +625,7 @@ def refresh_versions():
                 {
                     "status": "error",
                     "message": "Failed to refresh releases. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -447,7 +636,7 @@ def refresh_versions():
             "status": "success",
             "releases": releases,
             "count": len(releases),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
             "source": "cincinnati",
         }
     )
@@ -529,7 +718,7 @@ def _extract_operator_data(index_path, output_path):
 
     cmd = ["jq", "-r", jq_filter]
     with open(index_path, "r") as infile, open(output_path, "w") as outfile:
-        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True, timeout=60)
+        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True, timeout=TIMEOUT_JQ)
 
 
 def _extract_channel_data(index_path, output_path):
@@ -553,7 +742,7 @@ def _extract_channel_data(index_path, output_path):
 
     cmd = ["jq", "-r", jq_filter]
     with open(index_path, "r") as infile, open(output_path, "w") as outfile:
-        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True, timeout=60)
+        subprocess.run(cmd, stdin=infile, stdout=outfile, check=True, timeout=TIMEOUT_JQ)
 
 
 def _find_operator_channel(operator_name, channel_path):
@@ -674,7 +863,7 @@ def _refresh_operators_data(catalog, version):
             "operators": operators,
             "count": len(operators),
             "source": "opm",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
         },
         Path(main_path),
     )
@@ -707,7 +896,7 @@ def refresh_ocp_operators(catalog=None, version=None):
                 {
                     "status": "error",
                     "message": "Catalog parameter is required",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -719,7 +908,7 @@ def refresh_ocp_operators(catalog=None, version=None):
             {
                 "status": "success",
                 "data": operators,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
     except subprocess.CalledProcessError as e:
@@ -729,7 +918,7 @@ def refresh_ocp_operators(catalog=None, version=None):
                 {
                     "status": "error",
                     "message": "Failed to refresh operators. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -741,7 +930,7 @@ def refresh_ocp_operators(catalog=None, version=None):
                 {
                     "status": "error",
                     "message": "Failed to refresh operators. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -758,7 +947,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 {
                     "status": "error",
                     "message": "Version and channel parameter is required",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -773,7 +962,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 {
                     "status": "error",
                     "message": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -788,7 +977,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 {
                     "status": "error",
                     "message": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -829,7 +1018,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 "channel_releases": old_channels_releases,
                 "count": len(old_channels_releases),
                 "source": "cincinnati",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             },
             static_file_path,
         )
@@ -841,7 +1030,7 @@ def refresh_ocp_releases(version=None, channel=None):
                 {
                     "status": "error",
                     "message": "Failed to refresh releases. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -852,7 +1041,7 @@ def refresh_ocp_releases(version=None, channel=None):
             "status": "success",
             "channel_releases": channels_releases,
             "count": len(channels_releases),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
             "source": "cincinnati",
         }
     )
@@ -903,7 +1092,7 @@ def refresh_ocp_channels(version=None):
                 {
                     "status": "error",
                     "message": "No valid OCP versions found to refresh channels",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -939,7 +1128,7 @@ def refresh_ocp_channels(version=None):
                 "channels": old_channels,
                 "count": len(old_channels),
                 "source": "cincinnati",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             },
             static_file_path,
         )
@@ -951,7 +1140,7 @@ def refresh_ocp_channels(version=None):
                 {
                     "status": "error",
                     "message": "Failed to refresh channels. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -962,7 +1151,7 @@ def refresh_ocp_channels(version=None):
             "status": "success",
             "channels": channels,
             "count": len(channels),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
             "source": "cincinnati",
         }
     )
@@ -989,18 +1178,13 @@ def refresh_catalogs_for_version(version=None):
                         f"Loaded {len(releases)} releases from static file"
                     )
                     for release in releases:
-                        if re.match(r"^\d+\.\d+$", release):
-                            version_list.append(release)
+                        try:
+                            version_list.append(validate_version(release))
+                        except ValidationError:
+                            continue
 
         for version in version_list:
-            # Extract major.minor version from version string
-            if "." in version:
-                version_parts = version.split(".")
-                major = version_parts[0]
-                minor = version_parts[1]
-                version_key = f"{major}.{minor}"
-            else:
-                version_key = version
+            version_key = normalize_ocp_minor_version(version)
 
             app.logger.info(f"Discovering catalogs for OCP version {version_key}...")
 
@@ -1057,7 +1241,7 @@ def refresh_catalogs_for_version(version=None):
                                 f"Failed to generate catalogs for version {version_key}."
                                 " Check server logs for details."
                             ),
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "timestamp": utc_timestamp(),
                         }
                     ),
                     500,
@@ -1070,7 +1254,7 @@ def refresh_catalogs_for_version(version=None):
                 {
                     "status": "error",
                     "message": "Failed to discover catalogs. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1092,7 +1276,7 @@ def refresh_catalogs_for_version(version=None):
             "version": version,
             "catalogs": discovered_catalogs,
             "source": "base_catalogs",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
         }
     )
 
@@ -1125,7 +1309,7 @@ def get_versions():
                 "status": "success",
                 "releases": releases,
                 "count": len(releases),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
                 "source": "static_file",
             }
         )
@@ -1144,7 +1328,7 @@ def get_versions():
                 "status": "success",
                 "releases": releases,
                 "count": len(releases),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
                 "source": "cincinnati",
             }
         )
@@ -1154,7 +1338,7 @@ def get_versions():
                 {
                     "status": "error",
                     "message": "Failed to fetch releases from Cincinnati API",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1165,30 +1349,6 @@ def get_versions():
 def get_ocp_releases(version, channel):
     """Get available OCP releases for a specific version and channel"""
 
-    if version is None:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Version parameter is required",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            ),
-            400,
-        )
-
-    if channel is None:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Channel parameter is required",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            ),
-            400,
-        )
-
     # Validate version format using centralized validation
     try:
         version = validate_version(version)
@@ -1198,7 +1358,7 @@ def get_ocp_releases(version, channel):
                 {
                     "status": "error",
                     "message": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -1213,7 +1373,7 @@ def get_ocp_releases(version, channel):
                 {
                     "status": "error",
                     "message": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -1240,7 +1400,7 @@ def get_ocp_releases(version, channel):
                     "channel": channel,
                     "releases": channel_releases,
                     "source": "static_file",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             )
     except Exception as e:
@@ -1256,7 +1416,7 @@ def get_ocp_releases(version, channel):
                     "version": version,
                     "channel": channel,
                     "releases": release_data.json.get("channel_releases", []),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             )
         else:
@@ -1265,7 +1425,7 @@ def get_ocp_releases(version, channel):
                     {
                         "status": "error",
                         "message": f"No releases found for version {version} and channel {channel}",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 ),
                 404,
@@ -1282,7 +1442,7 @@ def get_ocp_releases(version, channel):
                         f"Failed to get OCP releases for version {version} and channel {channel}."
                         " Check server logs for details."
                     ),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1315,18 +1475,6 @@ def _sort_channels(channel_list, selected_version):
 def get_ocp_channels(version):
     """Get available OCP channels for a specific version"""
 
-    if version is None:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Version parameter is required",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            ),
-            400,
-        )
-
     # Validate version format using centralized validation
     try:
         version = validate_version(version)
@@ -1336,7 +1484,7 @@ def get_ocp_channels(version):
                 {
                     "status": "error",
                     "message": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             400,
@@ -1359,7 +1507,7 @@ def get_ocp_channels(version):
                         "version": version,
                         "channels": _sort_channels(channel_data, version),
                         "source": "static_file",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 )
     except Exception as e:
@@ -1377,7 +1525,7 @@ def get_ocp_channels(version):
                         "version": version,
                         "channels": _sort_channels(channels[version], version),
                         "source": "cincinnati",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 )
             else:
@@ -1386,7 +1534,7 @@ def get_ocp_channels(version):
                         {
                             "status": "error",
                             "message": f"No channels found for version {version}",
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "timestamp": utc_timestamp(),
                         }
                     ),
                     404,
@@ -1400,7 +1548,7 @@ def get_ocp_channels(version):
                 {
                     "status": "error",
                     "message": f"Failed to get OCP channels for version {version}. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1419,14 +1567,7 @@ def get_operator_mappings():
 def get_operator_catalogs(version):
     """Get operator catalog data for a specific OCP version from static file or refresh"""
 
-    # Extract major.minor version from version string
-    if "." in version:
-        version_parts = version.split(".")
-        major = version_parts[0]
-        minor = version_parts[1]
-        version_key = f"{major}.{minor}"
-    else:
-        version_key = version
+    version_key = normalize_ocp_minor_version(version)
 
     static_file = _data_read_file(f"catalogs-{version_key}.json")
 
@@ -1441,7 +1582,7 @@ def get_operator_catalogs(version):
                     "version": version,
                     "catalogs": catalogs,
                     "source": "static_file",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             )
         except Exception as e:
@@ -1458,7 +1599,7 @@ def get_operator_catalogs(version):
                 {
                     "status": "error",
                     "message": f'Failed to get operator catalogs for version {version}: {catalogs.json.get("message")}',
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1466,7 +1607,7 @@ def get_operator_catalogs(version):
 
     # Extract the catalog list for this version from the version-keyed dict
     # Normalize to major.minor since refresh_catalogs_for_version() uses that as key
-    version_key = ".".join(version.split(".")[:2])
+    version_key = normalize_ocp_minor_version(version)
     all_catalogs = catalogs.json.get("catalogs", {})
     available_catalogs = (
         all_catalogs.get(version_key, [])
@@ -1480,7 +1621,7 @@ def get_operator_catalogs(version):
                 {
                     "status": "error",
                     "message": f"No operator catalogs found for version {version}",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             404,
@@ -1492,7 +1633,7 @@ def get_operator_catalogs(version):
             "version": version,
             "catalogs": available_catalogs,
             "source": "opm",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
         }
     )
 
@@ -1563,7 +1704,7 @@ def get_available_catalogs():
                 "status": "success",
                 "catalogs": validated_catalogs,
                 "count": len(validated_catalogs),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -1574,7 +1715,7 @@ def get_available_catalogs():
                 {
                     "status": "error",
                     "message": "Failed to get available catalogs. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1607,7 +1748,7 @@ def list_catalogs_for_version(version):
                 "version": version,
                 "catalogs": valid_catalogs,
                 "source": "static_file",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -1640,19 +1781,16 @@ def get_operators_list():
 
         # if no version present in catalog append version value to catalog
         if version is not None:
-            if re.match(r"^\d+\.\d+$", version):
+            try:
+                validate_version(version)
+            except ValidationError:
+                pass
+            else:
                 # If version is in X.Y format, append it to catalog
                 if ":v" not in catalog:
                     catalog = f"{catalog}:v{version}"
 
-        # Extract major.minor version from version string
-        if "." in version:
-            version_parts = version.split(".")
-            major = version_parts[0]
-            minor = version_parts[1]
-            version_key = f"{major}.{minor}"
-        else:
-            version_key = version
+        version_key = normalize_ocp_minor_version(version)
 
         # Read static file path for operators
         operators = load_operators_from_file(catalog, version_key)
@@ -1668,7 +1806,7 @@ def get_operators_list():
             {
                 "status": "success",
                 "operators": operators,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
     except Exception as e:
@@ -1678,7 +1816,7 @@ def get_operators_list():
                 {
                     "status": "error",
                     "message": "Failed to load operators. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1690,19 +1828,10 @@ def get_operator_channels(operator_name):
     """Get available channels for a specific operator using cached data or opm render"""
     try:
         # Get parameters from query string
-        catalog = request.args.get(
-            "catalog", "registry.redhat.io/redhat/redhat-operator-index"
-        )
-        version = request.args.get("version", "4.18")
+        catalog = request.args.get("catalog", DEFAULT_OPERATOR_CATALOG)
+        version = request.args.get("version", DEFAULT_OCP_VERSION)
 
-        # Extract major.minor version from version string
-        if "." in version:
-            version_parts = version.split(".")
-            major = version_parts[0]
-            minor = version_parts[1]
-            version_key = f"{major}.{minor}"
-        else:
-            version_key = version
+        version_key = normalize_ocp_minor_version(version)
 
         # Create versioned catalog URL if not already versioned
         if ":v" not in catalog:
@@ -1742,7 +1871,7 @@ def get_operator_channels(operator_name):
                         "channels": channels,
                         "default_channel": default_channel,
                         "source": "cache",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 )
 
@@ -1770,7 +1899,7 @@ def get_operator_channels(operator_name):
                     "catalog": catalog_url,
                     "channels": [{"name": "stable", "default": True}],
                     "default_channel": "stable",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             )
 
@@ -1824,7 +1953,7 @@ def get_operator_channels(operator_name):
                 "channels": channels,
                 "default_channel": default_channel,
                 "source": "opm_render",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
         )
 
@@ -1834,7 +1963,7 @@ def get_operator_channels(operator_name):
                 {
                     "status": "error",
                     "message": "Request timeout while fetching operator channels",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             504,
@@ -1846,7 +1975,7 @@ def get_operator_channels(operator_name):
                 {
                     "status": "error",
                     "message": "Failed to fetch operator channels. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -1860,226 +1989,24 @@ def generate_preview():
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            return api_error("No data provided", 400, include_legacy_error=True)
 
-        # Create generator instance
-        generator = ImageSetGenerator()
-        newest_channel = {}
-
-        # Add OCP versions
-        if (
-            data.get("ocp_versions")
-            or data.get("ocp_min_version")
-            or data.get("ocp_max_version")
-        ):
-            # New approach with min/max versions
-            channel = data.get("ocp_channel", "stable-4.14")
-            min_version = data.get("ocp_min_version")
-            max_version = data.get("ocp_max_version")
-            graph = data.get("graph", True)
-
-            # Support legacy versions list for backward compatibility
-            legacy_versions = None
-            if data.get("ocp_versions"):
-                legacy_versions = [v.strip() for v in data["ocp_versions"] if v.strip()]
-
-            generator.add_ocp_versions(
-                versions=legacy_versions,
-                channel=channel,
-                min_version=min_version,
-                max_version=max_version,
-                graph=graph,
-            )
-
-        # Add operators
-        if data.get("operators"):
-            # Group operators by catalog and version
-            catalog_to_operators = {}
-            channels = {}
-
-            for op in data["operators"]:
-                # Process operator data using helper function
-                op_data = process_operator_data(op)
-                if not op_data:
-                    continue
-
-                # Prepare operator entry
-                op_entry = prepare_operator_entry(op_data)
-                if not op_entry:
-                    continue
-
-                # Filter versions when catalog and version range are available
-                name = op_data.get("name")
-                min_version = op_data.get("minVersion")
-                max_version = op_data.get("maxVersion")
-                catalog_name = (
-                    op_data.get("catalog") or data.get("operator_catalog") or ""
-                )
-                channel_list = set([])
-
-                if catalog_name and min_version and max_version:
-                    version_key = data.get("ocp_versions", [None])[0]
-                    catalog_index = (catalog_name.split("/")[-1]).split(":")[0]
-                    static_file_path = _data_read_file(
-                        f"operators-{catalog_index}-{version_key}.json"
-                    )
-                    temp_channel_version_map = {}
-                    possible_versions = []
-
-                    try:
-                        with open(static_file_path, "r") as f:
-                            operator_catalog_data = json.load(f)
-                            for operator in operator_catalog_data.get("operators", []):
-                                if operator.get("name") == name:
-                                    possible_versions.append(
-                                        operator.get("version", [])
-                                    )
-                                    temp_channel_version_map[
-                                        operator.get("version")
-                                    ] = operator.get("channel")
-                    except FileNotFoundError:
-                        app.logger.warning(
-                            f"Static operator data not found: {static_file_path}"
-                        )
-
-                    for version in possible_versions:
-                        try:
-                            if Version_Checker(version) >= Version_Checker(
-                                min_version
-                            ) and Version_Checker(version) <= Version_Checker(
-                                max_version
-                            ):
-                                channel_list.add(temp_channel_version_map.get(version))
-                                if version == max_version:
-                                    newest_channel[name] = temp_channel_version_map.get(
-                                        version
-                                    )
-                                continue
-                        except Exception as e:
-                            app.logger.warning(
-                                f"Version comparison error for {name} version {version} will try other method: {e}"
-                            )
-
-                        try:
-                            temp_version = version.split("-")[0]
-                            temp_max_version = max_version.split("-")[0]
-                            temp_min_version = min_version.split("-")[0]
-                            if Version_Checker(temp_version) >= Version_Checker(
-                                temp_min_version
-                            ) and Version_Checker(temp_version) <= Version_Checker(
-                                temp_max_version
-                            ):
-                                channel_list.add(temp_channel_version_map.get(version))
-                                if temp_version == temp_max_version:
-                                    newest_channel[name] = temp_channel_version_map.get(
-                                        version
-                                    )
-                                continue
-                        except Exception as e:
-                            app.logger.warning(
-                                f"Version comparison error for {name} version {version} will try other method: {e}"
-                            )
-
-                        try:
-                            temp_version = version.split("+")[0]
-                            temp_max_version = max_version.split("+")[0]
-                            temp_min_version = min_version.split("+")[0]
-                            if Version_Checker(temp_version) >= Version_Checker(
-                                temp_min_version
-                            ) and Version_Checker(temp_version) <= Version_Checker(
-                                temp_max_version
-                            ):
-                                channel_list.add(temp_channel_version_map.get(version))
-                                if temp_version == temp_max_version:
-                                    newest_channel[name] = temp_channel_version_map.get(
-                                        version
-                                    )
-                                continue
-                        except Exception as e:
-                            app.logger.warning(
-                                f"Version comparison error for {name} version {version} will try other method: {e}"
-                            )
-
-                channels[op_data["name"]] = channel_list
-
-                # Group by catalog
-                catalog = (
-                    op_data["catalog"]
-                    or "registry.redhat.io/redhat/redhat-operator-index"
-                )
-                try:
-                    validate_catalog_url(catalog)
-                except ValidationError:
-                    return jsonify({"error": f"Invalid catalog URL: {catalog}"}), 400
-                catalog_to_operators.setdefault(catalog, []).append(op_entry)
-            # Add operators for each catalog, passing full operator dicts
-            ocp_version = (
-                data.get("ocp_versions", [None])[0]
-                or data.get("ocp_min_version")
-                or data.get("ocp_max_version")
-            )
-            for catalog, ops in catalog_to_operators.items():
-                generator.add_operators(
-                    ops,
-                    catalog,
-                    channels,
-                    ocp_version=ocp_version,
-                    newest_channel=newest_channel,
-                )
-
-        # Add additional images
-        if data.get("additional_images"):
-            images = []
-            for img in data["additional_images"]:
-                if isinstance(img, str):
-                    img_val = img.strip()
-                elif isinstance(img, dict):
-                    img_val = (
-                        img.get("name", "").strip()
-                        if "name" in img and isinstance(img["name"], str)
-                        else ""
-                    )
-                else:
-                    img_val = ""
-                if img_val:
-                    images.append(img_val)
-            generator.add_additional_images(images)
-
-        # Add helm charts
-        if data.get("helm_charts"):
-            generator.add_helm_charts(data["helm_charts"])
-
-        # Set KubeVirt container mirroring
-        if data.get("kubevirt_container", False):
-            generator.set_kubevirt_container(True)
-
-        # Set archive size if provided
-        if data.get("archive_size"):
-            try:
-                generator.set_archive_size(int(data["archive_size"]))
-            except Exception:
-                pass
-        # Generate YAML
+        generator = _build_imageset_generator(data)
         yaml_content = generator.generate_yaml()
-        return jsonify(
-            {
-                "success": True,
-                "yaml": yaml_content,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
+        return api_success(
+            {"yaml": yaml_content},
+            include_legacy_success=True,
         )
 
+    except ValidationError as e:
+        return api_error(str(e), 400, include_legacy_error=True)
     except Exception as e:
         app.logger.error(f"Error generating preview: {str(e)}")
         app.logger.error(traceback.format_exc())
-        return (
-            jsonify(
-                {
-                    "error": "Failed to generate preview. Check server logs for details.",
-                    "success": False,
-                }
-            ),
+        return api_error(
+            "Failed to generate preview. Check server logs for details.",
             500,
+            include_legacy_error=True,
         )
 
 
@@ -2090,102 +2017,9 @@ def generate_download():
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            return api_error("No data provided", 400, include_legacy_error=True)
 
-        # Create generator instance
-        generator = ImageSetGenerator()
-
-        # Add OCP versions
-        if (
-            data.get("ocp_versions")
-            or data.get("ocp_min_version")
-            or data.get("ocp_max_version")
-        ):
-            channel = data.get("ocp_channel", "stable-4.14")
-            min_version = data.get("ocp_min_version")
-            max_version = data.get("ocp_max_version")
-            graph = data.get("graph", True)
-
-            legacy_versions = None
-            if data.get("ocp_versions"):
-                legacy_versions = [v.strip() for v in data["ocp_versions"] if v.strip()]
-
-            generator.add_ocp_versions(
-                versions=legacy_versions,
-                channel=channel,
-                min_version=min_version,
-                max_version=max_version,
-                graph=graph,
-            )
-
-        # Add operators using shared helpers
-        if data.get("operators"):
-            catalog_to_operators = {}
-            channels = {}
-
-            for op in data["operators"]:
-                op_data = process_operator_data(op)
-                if not op_data:
-                    continue
-
-                op_entry = prepare_operator_entry(op_data)
-                if not op_entry:
-                    continue
-
-                if op_data["channel"]:
-                    channels[op_data["name"]] = op_data["channel"]
-
-                catalog = (
-                    op_data["catalog"]
-                    or "registry.redhat.io/redhat/redhat-operator-index"
-                )
-                catalog_to_operators.setdefault(catalog, []).append(op_entry)
-
-            ocp_version = (
-                data.get("ocp_versions", [None])[0]
-                or data.get("ocp_min_version")
-                or data.get("ocp_max_version")
-            )
-            for catalog, ops in catalog_to_operators.items():
-                try:
-                    validate_catalog_url(catalog)
-                except ValidationError:
-                    return jsonify({"error": f"Invalid catalog URL: {catalog}"}), 400
-                generator.add_operators(ops, catalog, channels, ocp_version=ocp_version)
-
-        # Add additional images
-        if data.get("additional_images"):
-            images = []
-            for img in data["additional_images"]:
-                if isinstance(img, str):
-                    img_val = img.strip()
-                elif isinstance(img, dict):
-                    img_val = (
-                        img.get("name", "").strip()
-                        if "name" in img and isinstance(img["name"], str)
-                        else ""
-                    )
-                else:
-                    img_val = ""
-                if img_val:
-                    images.append(img_val)
-            generator.add_additional_images(images)
-
-        # Add helm charts
-        if data.get("helm_charts"):
-            generator.add_helm_charts(data["helm_charts"])
-
-        # Set KubeVirt container mirroring
-        if data.get("kubevirt_container", False):
-            generator.set_kubevirt_container(True)
-
-        # Set archive size if provided
-        if data.get("archive_size"):
-            try:
-                generator.set_archive_size(int(data["archive_size"]))
-            except Exception:
-                pass
-
+        generator = _build_imageset_generator(data)
         yaml_content = generator.generate_yaml()
         return app.response_class(
             yaml_content,
@@ -2195,17 +2029,15 @@ def generate_download():
             },
         )
 
+    except ValidationError as e:
+        return api_error(str(e), 400, include_legacy_error=True)
     except Exception as e:
         app.logger.error(f"Error generating download: {str(e)}")
         app.logger.error(traceback.format_exc())
-        return (
-            jsonify(
-                {
-                    "error": "Failed to generate download. Check server logs for details.",
-                    "success": False,
-                }
-            ),
+        return api_error(
+            "Failed to generate download. Check server logs for details.",
             500,
+            include_legacy_error=True,
         )
 
 
@@ -2216,7 +2048,7 @@ def validate_config():
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            return api_error("No data provided", 400, include_legacy_error=True)
 
         errors = []
         warnings = []
@@ -2270,25 +2102,21 @@ def validate_config():
                 if not chart.get("repository"):
                     errors.append("Helm chart repository is required")
 
-        return jsonify(
+        return api_success(
             {
-                "success": True,
                 "valid": len(errors) == 0,
                 "errors": errors,
                 "warnings": warnings,
-            }
+            },
+            include_legacy_success=True,
         )
 
     except Exception as e:
         app.logger.error(f"Error validating config: {str(e)}")
-        return (
-            jsonify(
-                {
-                    "error": "Failed to validate configuration. Check server logs for details.",
-                    "success": False,
-                }
-            ),
+        return api_error(
+            "Failed to validate configuration. Check server logs for details.",
             500,
+            include_legacy_error=True,
         )
 
 
@@ -2314,7 +2142,7 @@ def refresh_all_static_data():
                 {
                     "status": "error",
                     "message": "Error refreshing static data. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,
@@ -2324,7 +2152,7 @@ def refresh_all_static_data():
         {
             "status": "success",
             "message": "All static data refreshed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
         }
     )
 
@@ -2344,7 +2172,7 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handle 500 errors"""
-    return jsonify({"error": "Internal server error", "success": False}), 500
+    return api_error("Internal server error", 500, include_legacy_error=True)
 
 
 @app.route("/api/ocp-versions", methods=["GET"])
@@ -2366,7 +2194,7 @@ def get_ocp_versions_static():
                         "available_versions": data.get("releases", []),
                         "count": data.get("count", 0),
                         "source": data.get("source", "static_file"),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 )
         else:
@@ -2375,7 +2203,7 @@ def get_ocp_versions_static():
                     {
                         "status": "error",
                         "message": "Static OCP versions file not found",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 ),
                 404,
@@ -2386,7 +2214,7 @@ def get_ocp_versions_static():
                 {
                     "status": "error",
                     "message": "Error reading OCP versions. Check server logs for details.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 }
             ),
             500,

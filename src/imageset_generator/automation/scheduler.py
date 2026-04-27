@@ -139,32 +139,41 @@ class AutomationScheduler:
 
     def _schedule_last_week(self, day_of_week: int, hour: int, minute: int):
         """Schedule for last week of month (days 22-31)"""
-        # Create cron trigger for specific day of week in days 22-31
-        trigger = CronTrigger(
-            day="22-31",
+        self._schedule_month_window(
+            day_range="22-31",
+            expected_window="last-week",
+            job_id="automation-last-week",
+            job_name="ImageSet Automation (Last Week)",
             day_of_week=day_of_week,
             hour=hour,
             minute=minute,
-            timezone=self.scheduler_config.get("timezone", "UTC"),
-        )
-
-        self.scheduler.add_job(
-            func=self._run_with_window_check,
-            trigger=trigger,
-            args=["last-week"],
-            id="automation-last-week",
-            name="ImageSet Automation (Last Week)",
-            replace_existing=True,
-        )
-
-        logger.info(
-            f"Scheduled for last week: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}"
         )
 
     def _schedule_second_to_last_week(self, day_of_week: int, hour: int, minute: int):
         """Schedule for second-to-last week (days 15-21)"""
+        self._schedule_month_window(
+            day_range="15-21",
+            expected_window="second-to-last-week",
+            job_id="automation-second-to-last-week",
+            job_name="ImageSet Automation (Second-to-Last Week)",
+            day_of_week=day_of_week,
+            hour=hour,
+            minute=minute,
+        )
+
+    def _schedule_month_window(
+        self,
+        day_range: str,
+        expected_window: str,
+        job_id: str,
+        job_name: str,
+        day_of_week: int,
+        hour: int,
+        minute: int,
+    ):
+        """Schedule an automation job for a bounded monthly day range."""
         trigger = CronTrigger(
-            day="15-21",
+            day=day_range,
             day_of_week=day_of_week,
             hour=hour,
             minute=minute,
@@ -174,14 +183,14 @@ class AutomationScheduler:
         self.scheduler.add_job(
             func=self._run_with_window_check,
             trigger=trigger,
-            args=["second-to-last-week"],
-            id="automation-second-to-last-week",
-            name="ImageSet Automation (Second-to-Last Week)",
+            args=[expected_window],
+            id=job_id,
+            name=job_name,
             replace_existing=True,
         )
 
         logger.info(
-            f"Scheduled for second-to-last week: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}"
+            f"Scheduled for {expected_window}: day_of_week={day_of_week}, time={hour:02d}:{minute:02d}"
         )
 
     def _run_with_window_check(self, expected_window: str):

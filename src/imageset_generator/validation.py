@@ -87,6 +87,18 @@ def validate_version(version: str) -> str:
     return version
 
 
+def normalize_ocp_minor_version(version: str) -> str:
+    """Return the major.minor portion of an OCP version when possible."""
+    if not version or not isinstance(version, str):
+        return version
+
+    version = version.strip()
+    parts = version.split(".")
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        return f"{parts[0]}.{parts[1]}"
+    return version
+
+
 def validate_channel(channel: str) -> str:
     """
     Validate OCP channel string.

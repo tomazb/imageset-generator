@@ -20,24 +20,14 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from ..constants import TIMEOUT_NOTIFICATION_REQUEST
+from .sanitization import redact_sensitive
+
 logger = logging.getLogger(__name__)
 
 
 class NotificationManager:
     """Manages notifications across multiple channels"""
-
-    _SENSITIVE_KEYS = (
-        "password",
-        "token",
-        "secret",
-        "credentials",
-        "auth",
-        "api_key",
-        "apikey",
-        "access_key",
-        "refresh_token",
-        "private_key",
-    )
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -292,27 +282,12 @@ class NotificationManager:
 
     def _sanitize_payload(self, data: Any, redact_all: bool = False) -> Any:
         """Redact sensitive fields before sending structured payloads."""
-        if isinstance(data, dict):
-            sanitized = {}
-            for key, value in data.items():
-                key_str = str(key)
-                key_lower = key_str.lower()
-                if key_lower == "metadata":
-                    sanitized[key_str] = self._sanitize_payload(value, redact_all=True)
-                elif redact_all or any(
-                    term in key_lower for term in self._SENSITIVE_KEYS
-                ):
-                    sanitized[key_str] = "<redacted>"
-                else:
-                    sanitized[key_str] = self._sanitize_payload(value)
-            return sanitized
-        if isinstance(data, list):
-            return [
-                self._sanitize_payload(item, redact_all=redact_all) for item in data
-            ]
-        if redact_all:
-            return "<redacted>"
-        return data
+        return redact_sensitive(
+            data,
+            redacted_value="<redacted>",
+            redact_all=redact_all,
+            redact_metadata=True,
+        )
 
     def _send_slack(self, subject: str, message: str, data: Dict, event_type: str):
         """Send Slack notification"""
@@ -346,7 +321,9 @@ class NotificationManager:
             "attachments": [attachment],
         }
 
-        response = requests.post(webhook_url, json=payload, timeout=10)
+        response = requests.post(
+            webhook_url, json=payload, timeout=TIMEOUT_NOTIFICATION_REQUEST
+        )
         response.raise_for_status()
 
         logger.info(f"Slack notification sent: {subject}")
@@ -368,7 +345,11 @@ class NotificationManager:
         # Send webhook
         method = config.get("method", "POST").upper()
         response = requests.request(
-            method=method, url=config["url"], json=payload, headers=headers, timeout=10
+            method=method,
+            url=config["url"],
+            json=payload,
+            headers=headers,
+            timeout=TIMEOUT_NOTIFICATION_REQUEST,
         )
         response.raise_for_status()
 

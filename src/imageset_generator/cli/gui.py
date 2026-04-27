@@ -10,6 +10,7 @@ without using command-line arguments.
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
+from ..constants import DEFAULT_OCP_CHANNEL, DEFAULT_OPERATOR_CATALOG
 from ..generator import ImageSetGenerator
 
 
@@ -23,11 +24,9 @@ class ImageSetGeneratorGUI:
 
         # Variables for form data
         self.ocp_versions_var = tk.StringVar()
-        self.ocp_channel_var = tk.StringVar(value="stable-4.14")
+        self.ocp_channel_var = tk.StringVar(value=DEFAULT_OCP_CHANNEL)
         self.operators_var = tk.StringVar()
-        self.operator_catalog_var = tk.StringVar(
-            value="registry.redhat.io/redhat/redhat-operator-index"
-        )
+        self.operator_catalog_var = tk.StringVar(value=DEFAULT_OPERATOR_CATALOG)
         self.additional_images_var = tk.StringVar()
         self.output_file_var = tk.StringVar(value="imageset-config.yaml")
 
@@ -266,9 +265,9 @@ class ImageSetGeneratorGUI:
     def reset_fields(self):
         """Reset all form fields"""
         self.ocp_versions_var.set("")
-        self.ocp_channel_var.set("stable-4.14")
+        self.ocp_channel_var.set(DEFAULT_OCP_CHANNEL)
         self.operators_var.set("")
-        self.operator_catalog_var.set("registry.redhat.io/redhat/redhat-operator-index")
+        self.operator_catalog_var.set(DEFAULT_OPERATOR_CATALOG)
         self.additional_images_var.set("")
         self.output_file_var.set("imageset-config.yaml")
         self.helm_charts = []
@@ -379,16 +378,7 @@ class ImageSetGeneratorGUI:
             for op in operators.split(","):
                 op = op.strip()
                 if op:
-                    # If operator has selected versions, create a dict with the info
-                    if (
-                        hasattr(self, "operator_versions")
-                        and op in self.operator_versions
-                    ):
-                        operator_list.append(
-                            {"name": op, "selectedVersions": self.operator_versions[op]}
-                        )
-                    else:
-                        operator_list.append(op)
+                    operator_list.append(op)
 
             catalog = self.operator_catalog_var.get()
             generator.add_operators(operator_list, catalog)
@@ -411,61 +401,6 @@ class ImageSetGeneratorGUI:
         """Clear the preview area"""
         self.preview_text.delete(1.0, tk.END)
         self.status_var.set("Preview cleared")
-
-    def generate_config(self):
-        """Generate and save the ImageSetConfiguration"""
-        try:
-            # Get values from form
-            ocp_versions = [
-                v.strip() for v in self.ocp_versions_var.get().split(",") if v.strip()
-            ]
-            operators = [
-                op.strip() for op in self.operators_var.get().split(",") if op.strip()
-            ]
-            additional_images = [
-                img.strip()
-                for img in self.additional_images_var.get().split(",")
-                if img.strip()
-            ]
-
-            if not ocp_versions and not operators:
-                messagebox.showerror(
-                    "Error", "At least OCP versions or operators must be specified"
-                )
-                return
-
-            # Create generator and build config
-            generator = ImageSetGenerator()
-
-            if ocp_versions:
-                generator.add_ocp_versions(ocp_versions, self.ocp_channel_var.get())
-
-            if operators:
-                generator.add_operators(operators, self.operator_catalog_var.get())
-
-            if additional_images:
-                generator.add_additional_images(additional_images)
-
-            if self.helm_charts:
-                generator.add_helm_charts(self.helm_charts)
-
-            # Save to file
-            filename = self.output_file_var.get() or "imageset-config.yaml"
-            generator.save_to_file(filename)
-
-            # Update preview
-            self.preview_text.delete(1.0, tk.END)
-            self.preview_text.insert(1.0, generator.generate_yaml())
-
-            messagebox.showinfo(
-                "Success", f"Configuration generated and saved to {filename}"
-            )
-            self.status_var.set(f"Configuration saved to {filename}")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate configuration: {str(e)}")
-            self.status_var.set(f"Error: {str(e)}")
-
 
 class HelmChartDialog:
     """Dialog for adding Helm charts"""
